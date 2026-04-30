@@ -9,73 +9,84 @@ const TOPICS = [
     id: "manager-copilot",
     pillar: "AI at Work",
     title: "The manager copilot is really a decision system",
-    prompt: "Explore how AI helps managers notice patterns, tradeoffs, and follow-through."
+    prompt: "Explore how AI helps managers notice patterns, tradeoffs, and follow-through.",
+    profiles: ["product-ai", "consultant", "enterprise-leader"]
   },
   {
     id: "product-requirements-ai",
     pillar: "Product Thinking",
     title: "The AI-era PRD starts with judgment, not features",
-    prompt: "Reframe product requirements around decisions, context, uncertainty, and feedback."
+    prompt: "Reframe product requirements around decisions, context, uncertainty, and feedback.",
+    profiles: ["product-ai", "entrepreneur", "genai-engineer"]
   },
   {
     id: "shipping-ai-features",
     pillar: "Product Thinking",
     title: "Shipping AI features without making the product feel less trustworthy",
-    prompt: "Talk about confidence, graceful failure, user control, and expectation setting."
+    prompt: "Talk about confidence, graceful failure, user control, and expectation setting.",
+    profiles: ["product-ai", "entrepreneur", "genai-engineer"]
   },
   {
     id: "enterprise-ai-pilots",
     pillar: "Enterprise Transformation",
     title: "Why enterprise AI pilots stall after the first impressive demo",
-    prompt: "Connect adoption to incentives, process ownership, change management, and measurement."
+    prompt: "Connect adoption to incentives, process ownership, change management, and measurement.",
+    profiles: ["product-ai", "consultant", "enterprise-leader", "supply-chain"]
   },
   {
     id: "procurement-ai",
     pillar: "Enterprise Transformation",
     title: "Procurement may shape enterprise AI more than model quality",
-    prompt: "Show how legal, security, data access, and vendor risk decide what reaches production."
+    prompt: "Show how legal, security, data access, and vendor risk decide what reaches production.",
+    profiles: ["product-ai", "consultant", "enterprise-leader", "supply-chain"]
   },
   {
     id: "consumer-ai-memory",
     pillar: "Consumer AI",
     title: "Consumer AI gets interesting when it remembers taste, not just tasks",
-    prompt: "Explain why personalization, taste, and context change the product experience."
+    prompt: "Explain why personalization, taste, and context change the product experience.",
+    profiles: ["product-ai", "entrepreneur"]
   },
   {
     id: "ai-native-consumer-products",
     pillar: "Consumer AI",
     title: "AI-native consumer products need rituals, not just chat boxes",
-    prompt: "Explore habit loops, moments of delight, and repeat usage beyond novelty."
+    prompt: "Explore habit loops, moments of delight, and repeat usage beyond novelty.",
+    profiles: ["product-ai", "entrepreneur"]
   },
   {
     id: "leadership-ai-ambiguity",
     pillar: "Leadership in the Age of AI",
     title: "AI leadership is becoming ambiguity management",
-    prompt: "Write about making calls when capability, risk, and expectations keep shifting."
+    prompt: "Write about making calls when capability, risk, and expectations keep shifting.",
+    profiles: ["product-ai", "consultant", "enterprise-leader", "supply-chain"]
   },
   {
     id: "exec-ai-literacy",
     pillar: "Leadership in the Age of AI",
     title: "The new executive literacy: knowing what not to automate",
-    prompt: "Make the case for restraint, accountability, and protecting high-trust moments."
+    prompt: "Make the case for restraint, accountability, and protecting high-trust moments.",
+    profiles: ["product-ai", "consultant", "enterprise-leader", "supply-chain"]
   },
   {
     id: "metrics-for-ai-products",
     pillar: "Product Thinking",
     title: "The AI product metric that matters before retention",
-    prompt: "Focus on whether the product earns user trust through useful, repeated outcomes."
+    prompt: "Focus on whether the product earns user trust through useful, repeated outcomes.",
+    profiles: ["product-ai", "entrepreneur", "genai-engineer"]
   },
   {
     id: "enterprise-consumer-gap",
     pillar: "Enterprise Transformation",
     title: "Enterprise AI can learn from consumer AI's obsession with friction",
-    prompt: "Compare enterprise workflow depth with consumer-grade usability expectations."
+    prompt: "Compare enterprise workflow depth with consumer-grade usability expectations.",
+    profiles: ["product-ai", "consultant", "enterprise-leader"]
   },
   {
     id: "current-affair-product-lesson",
     pillar: "Current Affairs",
     title: "Turn a current headline into a product lesson",
-    prompt: "Use a live market or culture trigger, then extract the product and AI implication."
+    prompt: "Use a live market or culture trigger, then extract the domain, leadership, or operating implication."
   },
   {
     id: "ai-news-cycle-operating-reality",
@@ -86,8 +97,71 @@ const TOPICS = [
   {
     id: "contrarian-read-on-ai-narrative",
     pillar: "Current Affairs",
-    title: "A contrarian read on this week's AI narrative",
+    title: "A contrarian read on this week's dominant narrative",
     prompt: "Start from a current debate, then offer a grounded, original counterpoint."
+  },
+  {
+    id: "founder-capital-efficiency",
+    pillar: "Founder Operating Systems",
+    title: "Capital efficiency is becoming a founder superpower",
+    prompt: "Show how small teams can turn constraints into sharper product, GTM, and operating choices.",
+    profiles: ["entrepreneur"]
+  },
+  {
+    id: "founder-ai-leverage",
+    pillar: "Founder Operating Systems",
+    title: "The AI-native founder does not just move faster",
+    prompt: "Explain how founders can use AI to compress learning cycles without outsourcing judgment.",
+    profiles: ["entrepreneur", "product-ai"]
+  },
+  {
+    id: "consulting-ai-operating-model",
+    pillar: "Consulting and Advisory",
+    title: "The AI slide that needs an operating model behind it",
+    prompt: "Turn boardroom AI ambition into governance, workflows, measurement, and change execution.",
+    profiles: ["consultant", "enterprise-leader"]
+  },
+  {
+    id: "analyst-signal-vs-noise",
+    pillar: "Market Analysis",
+    title: "Signal vs noise in the next market narrative",
+    prompt: "Help analysts separate headline momentum from durable shifts in value pools and execution risk.",
+    profiles: ["consultant", "entrepreneur", "enterprise-leader"]
+  },
+  {
+    id: "genai-eval-reliability",
+    pillar: "Engineering and AI Systems",
+    title: "GenAI reliability is an evaluation problem before it is a model problem",
+    prompt: "Write about evals, failure modes, retrieval quality, guardrails, and production readiness.",
+    profiles: ["genai-engineer"]
+  },
+  {
+    id: "agentic-systems-recovery",
+    pillar: "Engineering and AI Systems",
+    title: "Judge AI agents by recovery, not demos",
+    prompt: "Explain why production agents need observability, fallback paths, memory boundaries, and human review.",
+    profiles: ["genai-engineer", "product-ai"]
+  },
+  {
+    id: "supply-chain-demand-sensing",
+    pillar: "Supply Chain Leadership",
+    title: "Demand sensing fails when decision rights are unclear",
+    prompt: "Connect AI forecasts to planning cadence, commercial incentives, inventory trade-offs, and accountability.",
+    profiles: ["supply-chain", "enterprise-leader"]
+  },
+  {
+    id: "supply-chain-control-tower",
+    pillar: "Supply Chain Leadership",
+    title: "The control tower is becoming a decision product",
+    prompt: "Reframe supply chain visibility around exceptions, judgment, response loops, and resilience.",
+    profiles: ["supply-chain"]
+  },
+  {
+    id: "enterprise-transformation-leadership",
+    pillar: "Leadership Systems",
+    title: "Transformation fails when leaders buy tools before changing rituals",
+    prompt: "Explore how executives turn new technology into operating cadence, incentives, and behavior change.",
+    profiles: ["enterprise-leader", "consultant", "supply-chain"]
   }
 ];
 
@@ -119,6 +193,114 @@ const DEFAULT_PERSONAL_STYLE = {
   ].join("\n\n")
 };
 
+const DEFAULT_PROFILE_ID = "product-ai";
+
+const PROFILE_PRESETS = [
+  {
+    id: "product-ai",
+    label: "Product x AI Leader",
+    chip: "Product/AI",
+    description: "PM, AI strategy, enterprise transformation, and consumer product judgment.",
+    voice: DEFAULT_VOICE,
+    personalStyle: DEFAULT_PERSONAL_STYLE
+  },
+  {
+    id: "entrepreneur",
+    label: "Entrepreneur / Founder",
+    chip: "Founder",
+    description: "Builder-led posts about markets, product, GTM, capital efficiency, and hard decisions.",
+    voice: {
+      tone: "Direct, practical, builder-led, optimistic but not naive",
+      audience: "Founders, operators, investors, early team members, and startup leaders",
+      pointOfView:
+        "Founders win when they turn constraints into sharper product judgment, faster learning loops, and disciplined execution",
+      credentials: "Founder/operator lens, customer discovery, GTM experiments, product-market fit, hiring, capital allocation",
+      avoid: "Empty hustle, vanity metrics, generic startup advice, fundraising theater"
+    },
+    personalStyle: {
+      instructions:
+        "Open with a founder tension, customer moment, market observation, or operating scar. Move quickly from story to lesson. Keep the voice specific, candid, and useful. Show the trade-off behind the decision. End with a question other builders would actually debate.",
+      samples: ""
+    }
+  },
+  {
+    id: "consultant",
+    label: "Consultant / Analyst",
+    chip: "Advisory",
+    description: "Boardroom-ready commentary for consulting, strategy, market analysis, and client transformation.",
+    voice: {
+      tone: "Analytical, structured, senior, concise, and commercially aware",
+      audience: "Consulting partners, analysts, client executives, transformation leaders, and strategy teams",
+      pointOfView:
+        "Good advisory work turns ambiguity into decision clarity, operating choices, and measurable business impact",
+      credentials: "Client transformation lens, market analysis, executive communication, operating model design, business case rigor",
+      avoid: "Deck-speak, vague frameworks, performative certainty, generic digital transformation language"
+    },
+    personalStyle: {
+      instructions:
+        "Open with a market signal, client pattern, boardroom tension, or counterintuitive data read. Structure the post like a sharp memo: observation, implication, risk, decision. Use crisp framing, clear trade-offs, and practical executive language.",
+      samples: ""
+    }
+  },
+  {
+    id: "genai-engineer",
+    label: "GenAI Engineer",
+    chip: "Engineering",
+    description: "Technical credibility for builders of LLM apps, agents, evals, RAG, and production AI systems.",
+    voice: {
+      tone: "Technically credible, precise, pragmatic, and implementation-aware",
+      audience: "AI engineers, platform teams, product engineers, ML leaders, founders, and technical PMs",
+      pointOfView:
+        "GenAI systems create value when engineering teams design for reliability, evaluation, observability, and human trust",
+      credentials: "LLM application engineering, RAG, agents, evals, observability, architecture, production trade-offs",
+      avoid: "Model hype, benchmark worship, hand-wavy architecture, unexplained jargon"
+    },
+    personalStyle: {
+      instructions:
+        "Open with a concrete production failure, engineering trade-off, or deceptively simple technical question. Explain the system underneath the demo. Make the post useful to builders without turning it into documentation. Name failure modes and design principles.",
+      samples: ""
+    }
+  },
+  {
+    id: "supply-chain",
+    label: "Supply Chain Leader",
+    chip: "Supply chain",
+    description: "Operations leadership across planning, resilience, procurement, logistics, and AI-enabled decisions.",
+    voice: {
+      tone: "Operational, grounded, executive, practical, and systems-oriented",
+      audience: "Supply chain leaders, COOs, planning teams, procurement leaders, logistics leaders, and transformation teams",
+      pointOfView:
+        "Supply chain advantage comes from better decision loops, clearer trade-offs, and resilience designed into daily operations",
+      credentials: "Planning cadence, demand sensing, inventory trade-offs, supplier risk, logistics, control towers, resilience",
+      avoid: "Buzzwords, dashboard theater, simplistic automation claims, ignoring frontline constraints"
+    },
+    personalStyle: {
+      instructions:
+        "Open with an operational tension, disruption, forecast miss, inventory trade-off, or planning-room observation. Translate complexity into a clear decision lesson. Keep examples concrete and executive-ready. End with a question about accountability, resilience, or trade-offs.",
+      samples: ""
+    }
+  },
+  {
+    id: "enterprise-leader",
+    label: "Enterprise Leader",
+    chip: "Executive",
+    description: "Senior leadership posts about transformation, operating cadence, talent, governance, and AI adoption.",
+    voice: {
+      tone: "Authoritative, measured, strategic, human, and practical",
+      audience: "CXOs, business unit leaders, transformation teams, HR leaders, and technology executives",
+      pointOfView:
+        "Enterprise transformation works when leaders redesign rituals, incentives, governance, and decision rights around the new capability",
+      credentials: "Enterprise operating models, change leadership, governance, talent systems, AI adoption, cross-functional execution",
+      avoid: "Top-down slogans, vague transformation language, tech-first thinking, culture platitudes"
+    },
+    personalStyle: {
+      instructions:
+        "Open with a leadership tension, organizational pattern, or transformation failure mode. Balance business logic with human context. Make the post useful for senior leaders who need to move from intent to operating change.",
+      samples: ""
+    }
+  }
+];
+
 const DEFAULT_GENERATION_SETTINGS = {
   styleMode: "Balanced",
   viralityMode: "Insight-led",
@@ -130,19 +312,41 @@ const DEFAULT_WORKFLOW = {
   activeStage: "idea"
 };
 
+const storedProfileId = loadJson("linkedinStudioSelectedProfile", DEFAULT_PROFILE_ID);
+const selectedProfileId = PROFILE_PRESETS.some((profile) => profile.id === storedProfileId)
+  ? storedProfileId
+  : DEFAULT_PROFILE_ID;
+const legacyVoice = loadJson("linkedinStudioVoice", DEFAULT_VOICE);
+const legacyPersonalStyle = ensurePersonalStyleSamples(loadJson("linkedinStudioPersonalStyle", DEFAULT_PERSONAL_STYLE), true);
+const savedProfileOverrides = loadJson("linkedinStudioProfileOverrides", {});
+
+if (!savedProfileOverrides[DEFAULT_PROFILE_ID]) {
+  savedProfileOverrides[DEFAULT_PROFILE_ID] = {
+    voice: legacyVoice,
+    personalStyle: legacyPersonalStyle
+  };
+}
+
+const initialProfileWorkspace = getProfileWorkspace(selectedProfileId, savedProfileOverrides);
+
 const state = {
-  selectedTopicId: TOPICS[0].id,
+  selectedProfileId,
+  profileOverrides: savedProfileOverrides,
+  selectedTopicId: getDefaultTopicForProfile(selectedProfileId).id,
   selectedAngle: "Teach",
-  voice: loadJson("linkedinStudioVoice", DEFAULT_VOICE),
-  personalStyle: ensurePersonalStyleSamples(loadJson("linkedinStudioPersonalStyle", DEFAULT_PERSONAL_STYLE)),
+  voice: initialProfileWorkspace.voice,
+  personalStyle: initialProfileWorkspace.personalStyle,
   generationSettings: ensureGenerationSettings(loadJson("linkedinStudioGenerationSettings", DEFAULT_GENERATION_SETTINGS)),
   workflow: loadJson("linkedinStudioWorkflow", DEFAULT_WORKFLOW),
   history: loadJson("linkedinStudioHistory", [])
 };
+saveJson("linkedinStudioProfileOverrides", state.profileOverrides);
 saveJson("linkedinStudioPersonalStyle", state.personalStyle);
 
 const elements = {
   weekLabel: document.querySelector("#weekLabel"),
+  profileGrid: document.querySelector("#profileGrid"),
+  selectedProfileMeta: document.querySelector("#selectedProfileMeta"),
   topicGrid: document.querySelector("#topicGrid"),
   pillarFilter: document.querySelector("#pillarFilter"),
   surpriseButton: document.querySelector("#surpriseButton"),
@@ -195,17 +399,17 @@ function saveJson(key, value) {
   localStorage.setItem(key, JSON.stringify(value));
 }
 
-function ensurePersonalStyleSamples(personalStyle) {
+function ensurePersonalStyleSamples(personalStyle, includeSeedSamples = false) {
   const style = {
     ...DEFAULT_PERSONAL_STYLE,
     ...personalStyle
   };
 
-  if (!style.samples.includes("First HYROX: Humbled")) {
+  if (includeSeedSamples && !style.samples.includes("First HYROX: Humbled")) {
     style.samples = `${style.samples.trim()}\n\n${HYROX_STYLE_SAMPLE}`;
   }
 
-  if (!style.samples.includes("stack of stacks")) {
+  if (includeSeedSamples && !style.samples.includes("stack of stacks")) {
     style.samples = `${style.samples.trim()}\n\n${FULL_STACK_STYLE_SAMPLE}`;
   }
 
@@ -223,10 +427,77 @@ function ensurePersonalStyleSamples(personalStyle) {
 }
 
 function ensureGenerationSettings(settings) {
+  const migratedStyleMode = {
+    "Brand-led": "Profile-led",
+    "Style-led": "Tone-led"
+  }[settings?.styleMode] || settings?.styleMode;
+
   return {
     ...DEFAULT_GENERATION_SETTINGS,
-    ...settings
+    ...settings,
+    styleMode: migratedStyleMode || DEFAULT_GENERATION_SETTINGS.styleMode
   };
+}
+
+function getSelectedProfile() {
+  return PROFILE_PRESETS.find((profile) => profile.id === state.selectedProfileId) || PROFILE_PRESETS[0];
+}
+
+function getProfilePreset(profileId) {
+  return PROFILE_PRESETS.find((profile) => profile.id === profileId) || PROFILE_PRESETS[0];
+}
+
+function getProfileWorkspace(profileId, overrides = {}) {
+  const preset = getProfilePreset(profileId);
+  const override = overrides[profileId] || {};
+  return {
+    voice: {
+      ...preset.voice,
+      ...(override.voice || {})
+    },
+    personalStyle: ensurePersonalStyleSamples({
+      ...preset.personalStyle,
+      ...(override.personalStyle || {})
+    }, profileId === DEFAULT_PROFILE_ID)
+  };
+}
+
+function persistProfileWorkspace() {
+  state.profileOverrides = {
+    ...state.profileOverrides,
+    [state.selectedProfileId]: {
+      voice: state.voice,
+      personalStyle: state.personalStyle
+    }
+  };
+  saveJson("linkedinStudioProfileOverrides", state.profileOverrides);
+  saveJson("linkedinStudioVoice", state.voice);
+  saveJson("linkedinStudioPersonalStyle", state.personalStyle);
+}
+
+function topicMatchesProfile(topic, profileId = state.selectedProfileId) {
+  return !Array.isArray(topic.profiles) || topic.profiles.includes(profileId);
+}
+
+function getTopicsForProfile(profileId = state.selectedProfileId) {
+  return TOPICS
+    .filter((topic) => topicMatchesProfile(topic, profileId))
+    .sort((a, b) => {
+      const aSpecific = Array.isArray(a.profiles) && a.profiles.includes(profileId);
+      const bSpecific = Array.isArray(b.profiles) && b.profiles.includes(profileId);
+      return Number(bSpecific) - Number(aSpecific);
+    });
+}
+
+function getDefaultTopicForProfile(profileId) {
+  const effectiveProfileId = profileId || (typeof state === "undefined" ? DEFAULT_PROFILE_ID : state.selectedProfileId);
+  return getTopicsForProfile(effectiveProfileId)[0] || TOPICS[0];
+}
+
+function ensureSelectedTopicForProfile() {
+  if (!topicMatchesProfile(getSelectedTopic(), state.selectedProfileId)) {
+    state.selectedTopicId = getDefaultTopicForProfile(state.selectedProfileId).id;
+  }
 }
 
 function getSelectedTopic() {
@@ -245,17 +516,37 @@ function getWeekLabel() {
   return `Week ${week} - ${now.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
 }
 
+function renderProfilePicker() {
+  const profile = getSelectedProfile();
+  elements.selectedProfileMeta.textContent = profile.description;
+  elements.profileGrid.innerHTML = PROFILE_PRESETS.map((item) => {
+    const active = item.id === state.selectedProfileId ? " active" : "";
+    return `
+      <button class="profile-card${active}" type="button" data-profile-id="${item.id}">
+        <span>
+          <strong>${escapeHtml(item.label)}</strong>
+          <span>${escapeHtml(item.description)}</span>
+        </span>
+        <span class="profile-chip">${escapeHtml(item.chip)}</span>
+      </button>
+    `;
+  }).join("");
+}
+
 function renderPillarFilter() {
-  const pillars = [...new Set(TOPICS.map((topic) => topic.pillar))];
+  const currentValue = elements.pillarFilter.value || "All";
+  const pillars = [...new Set(getTopicsForProfile().map((topic) => topic.pillar))];
   elements.pillarFilter.innerHTML = [
     '<option value="All">All pillars</option>',
     ...pillars.map((pillar) => `<option value="${escapeHtml(pillar)}">${escapeHtml(pillar)}</option>`)
   ].join("");
+  elements.pillarFilter.value = pillars.includes(currentValue) ? currentValue : "All";
 }
 
 function renderTopics() {
   const filter = elements.pillarFilter.value || "All";
-  const topics = filter === "All" ? TOPICS : TOPICS.filter((topic) => topic.pillar === filter);
+  const profileTopics = getTopicsForProfile();
+  const topics = filter === "All" ? profileTopics : profileTopics.filter((topic) => topic.pillar === filter);
 
   elements.topicGrid.innerHTML = topics
     .map((topic) => {
@@ -349,7 +640,7 @@ function renderHistory() {
       return `
         <article class="history-item">
           <strong>${escapeHtml(item.topic)}</strong>
-          <span>${escapeHtml(item.pillar)} - ${escapeHtml(item.angle)} - ${date}</span>
+          <span>${escapeHtml(item.profileLabel || "General")} - ${escapeHtml(item.pillar)} - ${escapeHtml(item.angle)} - ${date}</span>
         </article>
       `;
     })
@@ -374,6 +665,9 @@ function renderSampleMetrics() {
 
 function renderAll() {
   elements.weekLabel.textContent = getWeekLabel();
+  ensureSelectedTopicForProfile();
+  renderProfilePicker();
+  renderPillarFilter();
   renderTopics();
   renderComposer();
   renderVoice();
@@ -392,7 +686,7 @@ function syncVoiceFromInputs() {
     credentials: elements.voiceCredentials.value.trim(),
     avoid: elements.voiceAvoid.value.trim()
   };
-  saveJson("linkedinStudioVoice", state.voice);
+  persistProfileWorkspace();
 }
 
 function syncPersonalStyleFromInputs() {
@@ -400,7 +694,7 @@ function syncPersonalStyleFromInputs() {
     instructions: elements.styleInstructions.value.trim(),
     samples: elements.styleSamples.value.trim()
   };
-  saveJson("linkedinStudioPersonalStyle", state.personalStyle);
+  persistProfileWorkspace();
   renderSampleMetrics();
 }
 
@@ -439,6 +733,7 @@ function getPublishableDraft() {
 }
 
 function getWorkflowPayload() {
+  const profile = getSelectedProfile();
   const topic = getSelectedTopic();
   syncVoiceFromInputs();
   syncPersonalStyleFromInputs();
@@ -446,6 +741,11 @@ function getWorkflowPayload() {
   syncWorkflowFromInputs();
 
   return {
+    profile: {
+      id: profile.id,
+      label: profile.label,
+      description: profile.description
+    },
     topic,
     angle: state.selectedAngle,
     voice: state.voice,
@@ -487,6 +787,7 @@ async function generatePost() {
     showToast(data.provider === "claude" ? "Claude draft ready." : "Local draft ready.");
   } catch (error) {
     elements.draftOutput.value = createLocalDraft(
+      payload.profile,
       payload.topic,
       state.selectedAngle,
       state.voice,
@@ -600,17 +901,18 @@ function createLocalWorkflowText(stage, payload) {
   return "";
 }
 
-function createLocalDraft(topic, angle, voice, personalStyle = {}, generationSettings = DEFAULT_GENERATION_SETTINGS, userIdea = "") {
-  const title = topic.title || "How AI changes product work";
+function createLocalDraft(profile, topic, angle, voice, personalStyle = {}, generationSettings = DEFAULT_GENERATION_SETTINGS, userIdea = "") {
+  const profileLabel = profile?.label || "professional";
+  const title = topic.title || "How this shift changes work";
   const topicPhrase = title.charAt(0).toLowerCase() + title.slice(1);
-  const pillar = topic.pillar || "AI at Work";
+  const pillar = topic.pillar || "Professional Insight";
   const currentTrigger = generationSettings.currentAffair || "";
   const viralityMode = generationSettings.viralityMode || "Insight-led";
   const styleMode = generationSettings.styleMode || "Balanced";
-  const audience = voice.audience || "product and AI leaders";
+  const audience = voice.audience || "domain peers and business leaders";
   const pointOfView =
     voice.pointOfView ||
-    "AI creates advantage when teams redesign decisions and workflows, not when they simply add another tool";
+    "distinctive expertise compounds when professionals turn domain judgment into clear decisions and useful stories";
 
   const hasStyleSamples = Boolean((personalStyle.samples || "").trim());
   const triggerPhrase = currentTrigger ? currentTrigger.split(/[.!?\n]/)[0].trim() : topicPhrase;
@@ -624,7 +926,7 @@ function createLocalDraft(topic, angle, voice, personalStyle = {}, generationSet
       hasStyleSamples
         ? `The visible story is ${topicPhrase}. The real story is the system around it.`
         : `The useful lesson in ${topicPhrase} is less about tools and more about operating design.`,
-      `A simple test for ${pillar.toLowerCase()}: does it change the decision, or just decorate the workflow?`
+      `A simple test for ${pillar.toLowerCase()}: does it improve the decision, or just decorate the workflow?`
     ],
     Challenge: [
       `The comfortable take on ${topicPhrase} misses the point.`,
@@ -635,14 +937,14 @@ function createLocalDraft(topic, angle, voice, personalStyle = {}, generationSet
       `A lot of ${pillar.toLowerCase()} work sounds strategic until you inspect the operating model.`
     ],
     "Personal story": [
-      `A pattern I keep seeing in product work: ${topicPhrase} only becomes real when the team changes its habits.`,
-      `The first time ${topicPhrase} clicked for me, it was not because the model got better.`,
-      "One lesson I have learned from building around AI: the product decision matters more than the demo."
+      `A pattern I keep seeing in serious work: ${topicPhrase} only becomes real when the team changes its habits.`,
+      `The first time ${topicPhrase} clicked for me, it was not because the tool got better.`,
+      "One lesson I keep relearning: the decision matters more than the demo."
     ],
     "Hot take": [
       `Hot take: ${topicPhrase} will reward disciplined operators more than flashy experimenters.`,
       `The biggest unlock in ${topicPhrase} is not speed. It is judgment at scale.`,
-      `I suspect the winners in ${pillar.toLowerCase()} will look less like AI labs and more like disciplined product teams.`
+      `I suspect the winners in ${pillar.toLowerCase()} will look less like commentators and more like disciplined operators.`
     ]
   };
 
@@ -650,7 +952,7 @@ function createLocalDraft(topic, angle, voice, personalStyle = {}, generationSet
     hooks[angle] = [
       currentTrigger
         ? `The headline is about ${triggerPhrase}. The real story is what it reveals underneath.`
-        : `The easiest take on this week's AI narrative is probably the least useful one.`,
+        : `The easiest take on this week's narrative is probably the least useful one.`,
       `A current headline is useful only if it helps us see the system behind the noise.`,
       `The news cycle moves fast. Operating reality moves slower. That gap is where the lesson sits.`
     ];
@@ -660,14 +962,14 @@ function createLocalDraft(topic, angle, voice, personalStyle = {}, generationSet
     hooks[angle] = [
       `The popular take on ${topicPhrase} is too neat.`,
       `I think the obvious lesson from ${topicPhrase} is the wrong one.`,
-      `We may be overestimating the technology shift and underestimating the operating shift.`
+      `We may be overestimating the headline shift and underestimating the operating shift.`
     ];
   }
 
   if (viralityMode === "Anecdote-led") {
     hooks[angle] = [
       `A small moment changed how I think about ${topicPhrase}.`,
-      `This sounds like a technology story. It is really a human behavior story.`,
+      `This sounds like a tools story. It is really a human behavior story.`,
       `I keep coming back to one pattern: people do not adopt systems. They adopt relief from friction.`
     ];
   }
@@ -675,32 +977,32 @@ function createLocalDraft(topic, angle, voice, personalStyle = {}, generationSet
   if (viralityMode === "Debate spark") {
     hooks[angle] = [
       `What if the way we talk about ${topicPhrase} is making teams less prepared?`,
-      `There are two kinds of leaders in the AI shift. Only one is building for what comes next.`,
+      `There are two kinds of leaders in any major shift. Only one is building for what comes next.`,
       `A question worth debating: are we automating work, or just moving the bottleneck somewhere else?`
     ];
   }
 
   const body = {
     Teach:
-      "A strong AI workflow has three parts: a clear human decision, a model-assisted input, and a feedback loop that makes the next decision better. If any one of those is missing, the team usually gets a polished shortcut instead of a real capability.",
+      `A strong ${profileLabel.toLowerCase()} post has three parts: a real decision, a concrete example, and a lesson that helps the audience see their own work differently. If any one of those is missing, the post usually becomes a polished opinion instead of a useful signal.`,
     Challenge:
-      "The trap is treating AI as a layer you add after the product strategy is set. The better move is to ask where judgment, context, and repetition already live in the customer or employee journey, then redesign that moment around a better decision.",
+      "The trap is treating a new capability as a layer you add after the strategy is set. The better move is to ask where judgment, context, and repetition already live in the journey, then redesign that moment around a better decision.",
     "Personal story":
-      "In practice, the useful breakthroughs tend to be quiet. A support team routes issues with better context. A PM sees risk earlier. A customer gets a next step that feels obvious instead of automated. None of this looks dramatic in a demo, but it compounds.",
+      "In practice, the useful breakthroughs tend to be quiet. A team notices the hidden constraint earlier. A leader makes a sharper trade-off. A customer or stakeholder gets a next step that feels obvious instead of abstract. None of this looks dramatic in a demo, but it compounds.",
     "Hot take":
-      "The teams that win will not be the ones with the longest list of pilots. They will be the ones who can turn one high-value workflow into a repeatable operating advantage, then keep improving it with real usage data."
+      `The ${profileLabel.toLowerCase()} voices that stand out will not be the ones with the broadest takes. They will be the ones who can turn one high-value pattern into a repeatable insight, then keep sharpening it with real evidence.`
   };
 
   const styleModeLine = {
     Balanced: `For ${audience}, the implication is pretty direct: ${pointOfView}.`,
-    "Brand-led": `For ${audience}, the strategic implication is direct: ${pointOfView}.`,
-    "Style-led": `But here is the part I keep returning to: ${pointOfView}.`
+    "Profile-led": `For ${audience}, the strategic implication is direct: ${pointOfView}.`,
+    "Tone-led": `But here is the part I keep returning to: ${pointOfView}.`
   };
 
   const viralityBridge = {
     "Insight-led": hasStyleSamples
       ? "It is not enough to make one part of the machine faster. The surrounding constraints, incentives, handoffs, and judgment loops have to change with it."
-      : "That changes the product brief. Instead of asking \"where can we use AI?\", the sharper question is: \"which decision would become meaningfully better if the system had more context, memory, and iteration?\"",
+      : "That changes the brief. Instead of asking \"where can we use this?\", the sharper question is: \"which decision would become meaningfully better if the system had more context, memory, and iteration?\"",
     "Current affairs": currentTrigger
       ? "The point is not to react to the headline. The point is to ask what the headline exposes about incentives, power, adoption, and timing."
       : "The point is not to chase the news cycle. The point is to use it as a diagnostic for what is changing underneath.",
@@ -725,7 +1027,7 @@ function createLocalDraft(topic, angle, voice, personalStyle = {}, generationSet
     "",
     viralityMode === "Debate spark"
       ? "Which side of this debate are you on?"
-      : "Where are you seeing AI actually change the way work gets done, not just the interface around it?"
+      : "Where are you seeing this actually change the way work gets done, not just the language around it?"
   ].join("\n");
 }
 
@@ -739,15 +1041,17 @@ function createLocalCritique(payload) {
     "Hook: Make the first line sharper and more specific. It should create tension before it explains.",
     `Core idea: ${hasIdea ? "The draft uses the user idea, but the implication can be made more explicit." : "The draft would be stronger with a concrete user idea or lived trigger."}`,
     "Structure: Keep the post moving from observation to tension to implication. Remove any paragraph that only repeats the same claim.",
-    "Originality: Push beyond a generic AI/product lesson. Name the hidden bottleneck, trade-off, or human behavior underneath.",
+    "Originality: Push beyond a generic business lesson. Name the hidden bottleneck, trade-off, or human behavior underneath.",
     `Engagement: ${hasQuestion ? "The closing question is present; make it more debatable." : "Add a closing question that invites a point of view."}`,
     `Length: ${words} words. Aim for 130-220 words unless the story needs more room.`,
-    "Rewrite direction: Start with the strongest tension, add one concrete example or analogy, then end with a crisp leadership/product implication."
+    "Rewrite direction: Start with the strongest tension, add one concrete example or analogy, then end with a crisp leadership or domain implication."
   ].join("\n");
 }
 
 function createLocalRewrite(payload) {
+  const profileLabel = payload.profile?.label || "professional";
   const source = payload.draft || createLocalDraft(
+    payload.profile,
     payload.topic,
     payload.angle,
     payload.voice,
@@ -765,19 +1069,19 @@ function createLocalRewrite(payload) {
     "",
     "The deeper story is usually less convenient.",
     "",
-    "Most teams look at AI through the lens of capability: what can the model do, how fast can it do it, and where can we plug it into the workflow?",
+    "Most teams look at change through the lens of capability: what can the tool do, how fast can it do it, and where can we plug it into the workflow?",
     "",
     "But capability is rarely the real bottleneck.",
     "",
-    "The harder question is whether the surrounding system is ready for the change: incentives, handoffs, governance, trust, and the human judgment that still has to sit between the model and the outcome.",
+    "The harder question is whether the surrounding system is ready for the change: incentives, handoffs, governance, trust, and the human judgment that still has to sit between the tool and the outcome.",
     "",
-    "This is where many AI efforts lose momentum. They improve one node in the chain while the rest of the organization continues to run on old assumptions.",
+    "This is where many efforts lose momentum. They improve one node in the chain while the rest of the organization continues to run on old assumptions.",
     "",
-    "The lesson for product and leadership teams is simple: do not just ask what AI can automate.",
+    "The lesson for leaders and operators is simple: do not just ask what the new capability can automate.",
     "",
-    "Ask what decision, behavior, or operating rhythm needs to be redesigned because AI is now part of the system.",
+    `For a ${profileLabel.toLowerCase()}, the stronger question is not just what changed. It is which decision, behavior, or operating rhythm now needs to be redesigned.`,
     "",
-    "Where do you think teams are still confusing AI capability with AI readiness?"
+    "Where do you think teams are still confusing new capability with real readiness?"
   ].join("\n");
 }
 
@@ -803,8 +1107,11 @@ function saveToTracker() {
   }
 
   const topic = getSelectedTopic();
+  const profile = getSelectedProfile();
   const item = {
     id: crypto.randomUUID(),
+    profileId: profile.id,
+    profileLabel: profile.label,
     topicId: topic.id,
     topic: topic.title,
     pillar: topic.pillar,
@@ -837,12 +1144,46 @@ async function copyDraft() {
   }
 }
 
+function clearWorkflowOutputs() {
+  elements.draftOutput.value = "";
+  elements.critiqueOutput.value = "";
+  elements.rewriteOutput.value = "";
+  elements.finalOutput.value = "";
+  state.workflow = {
+    ...state.workflow,
+    activeStage: "idea"
+  };
+  saveJson("linkedinStudioWorkflow", state.workflow);
+  renderMetrics();
+}
+
+function selectProfile(profileId) {
+  if (profileId === state.selectedProfileId) {
+    return;
+  }
+
+  syncVoiceFromInputs();
+  syncPersonalStyleFromInputs();
+  state.selectedProfileId = profileId;
+  saveJson("linkedinStudioSelectedProfile", state.selectedProfileId);
+
+  const workspace = getProfileWorkspace(profileId, state.profileOverrides);
+  state.voice = workspace.voice;
+  state.personalStyle = workspace.personalStyle;
+  state.selectedTopicId = getDefaultTopicForProfile(profileId).id;
+  elements.pillarFilter.value = "All";
+  clearWorkflowOutputs();
+  renderAll();
+  showToast(`${getSelectedProfile().label} profile loaded.`);
+}
+
 function surpriseMe() {
   const currentFilter = elements.pillarFilter.value || "All";
-  const candidates = (currentFilter === "All" ? TOPICS : TOPICS.filter((topic) => topic.pillar === currentFilter)).filter(
+  const profileTopics = getTopicsForProfile();
+  const candidates = (currentFilter === "All" ? profileTopics : profileTopics.filter((topic) => topic.pillar === currentFilter)).filter(
     (topic) => !isTopicUsed(topic.id)
   );
-  const pool = candidates.length ? candidates : TOPICS;
+  const pool = candidates.length ? candidates : profileTopics;
   const nextTopic = pool[Math.floor(Math.random() * pool.length)];
   const angles = ["Teach", "Challenge", "Personal story", "Hot take"];
   state.selectedTopicId = nextTopic.id;
@@ -888,6 +1229,12 @@ function escapeHtml(value) {
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
 }
+
+elements.profileGrid.addEventListener("click", (event) => {
+  const card = event.target.closest("[data-profile-id]");
+  if (!card) return;
+  selectProfile(card.dataset.profileId);
+});
 
 elements.topicGrid.addEventListener("click", (event) => {
   const card = event.target.closest("[data-topic-id]");
@@ -948,17 +1295,19 @@ elements.saveButton.addEventListener("click", saveToTracker);
 });
 elements.critiqueOutput.addEventListener("input", () => setWorkflowStage("critique"));
 elements.resetVoiceButton.addEventListener("click", () => {
-  state.voice = structuredClone(DEFAULT_VOICE);
-  saveJson("linkedinStudioVoice", state.voice);
+  state.voice = structuredClone(getSelectedProfile().voice);
+  persistProfileWorkspace();
   renderVoice();
-  showToast("Brand voice reset.");
+  showToast("Profile voice reset.");
 });
 elements.resetStyleButton.addEventListener("click", () => {
-  state.personalStyle = structuredClone(DEFAULT_PERSONAL_STYLE);
-  saveJson("linkedinStudioPersonalStyle", state.personalStyle);
+  state.personalStyle = ensurePersonalStyleSamples(
+    structuredClone(getSelectedProfile().personalStyle),
+    state.selectedProfileId === DEFAULT_PROFILE_ID
+  );
+  persistProfileWorkspace();
   renderPersonalStyle();
-  showToast("Personal style reset.");
+  showToast("Tone samples reset.");
 });
 
-renderPillarFilter();
 renderAll();
