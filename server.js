@@ -1,4 +1,4 @@
-require("dotenv").config();
+require("dotenv").config({ quiet: true });
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
@@ -73,11 +73,49 @@ function getAnthropicApiKey() {
   return { name: "", value: "" };
 }
 
+function maskSecret(value) {
+  const cleanValue = cleanSecret(value);
+  if (!cleanValue) {
+    return "missing";
+  }
+
+  if (cleanValue.length <= 8) {
+    return "present";
+  }
+
+  return `${cleanValue.slice(0, 6)}...${cleanValue.slice(-4)}`;
+}
+
 function getAnthropicEnvStatus() {
   return ANTHROPIC_API_KEY_NAMES.map((name) => {
     const value = cleanSecret(getEnvValueCaseInsensitive(name));
     return `${name}:${value ? "present" : "missing"}`;
   }).join(", ");
+}
+
+function getRelevantEnvNames() {
+  return Object.keys(process.env)
+    .filter((name) => /anthropic|claude|railway|port|node_env/i.test(name))
+    .sort();
+}
+
+function getConfigStatus() {
+  const apiKey = getAnthropicApiKey();
+  return {
+    ok: true,
+    generationProvider: apiKey.value ? "claude" : "local",
+    anthropicKeyDetected: Boolean(apiKey.value),
+    anthropicKeyName: apiKey.name || null,
+    anthropicKeyPreview: apiKey.value ? maskSecret(apiKey.value) : "missing",
+    anthropicEnvStatus: getAnthropicEnvStatus(),
+    model: CLAUDE_MODEL,
+    host: HOST,
+    port: PORT,
+    nodeEnv: process.env.NODE_ENV || null,
+    railwayEnvironment: process.env.RAILWAY_ENVIRONMENT || null,
+    railwayServiceName: process.env.RAILWAY_SERVICE_NAME || null,
+    relevantEnvNames: getRelevantEnvNames()
+  };
 }
 
 function sanitizeBlock(value, fallback = "", maxLength = 12000) {
@@ -405,6 +443,11 @@ function serveStatic(req, res) {
 }
 
 const server = http.createServer(async (req, res) => {
+  if (req.method === "GET" && req.url === "/api/health") {
+    sendJson(res, 200, getConfigStatus());
+    return;
+  }
+
   if (req.method === "POST" && req.url === "/api/generate") {
     try {
       const payload = JSON.parse(await readBody(req));
@@ -435,11 +478,15 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, HOST, () => {
   console.log(`LinkedIn Content Studio running at http://${HOST}:${PORT}`);
-  const apiKey = getAnthropicApiKey();
-  console.log(`Anthropic env status: ${getAnthropicEnvStatus()}`);
-  if (apiKey.value) {
-    console.log(`Claude generation enabled via ${apiKey.name}.`);
+  const configStatus = getConfigStatus();
+  console.log(`Anthropic env status: ${configStatus.anthropicEnvStatus}`);
+  console.log(`Relevant env names visible: ${configStatus.relevantEnvNames.join(", ") || "none"}`);
+  if (configStatus.anthropicKeyDetected) {
+    console.log(`Claude generation enabled via ${configStatus.anthropicKeyName}.`);
   } else {
     console.log("No Anthropic API key detected; using local draft generation.");
+    if (process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_SERVICE_NAME) {
+      console.log("Railway fix: add ANTHROPIC_API_KEY to this service's Variables tab, then redeploy this service.");
+    }
   }
 });

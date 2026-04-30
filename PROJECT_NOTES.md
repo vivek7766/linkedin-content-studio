@@ -57,10 +57,19 @@ Expected healthy deploy log:
 
 ```text
 Anthropic env status: ANTHROPIC_API_KEY:present, ANTHROPIC_KEY:missing, CLAUDE_API_KEY:missing
+Relevant env names visible: ANTHROPIC_API_KEY, PORT, RAILWAY_ENVIRONMENT, ...
 Claude generation enabled via ANTHROPIC_API_KEY.
 ```
 
 If the log says all three are missing, Railway has not attached the variable to this service/deployment. Add it under the service Variables tab and redeploy.
+
+Safe runtime diagnostic endpoint:
+
+```text
+https://YOUR_RAILWAY_DOMAIN/api/health
+```
+
+This endpoint returns whether Claude generation is active, which supported key name was detected, and which relevant environment variable names are visible. It never returns the full API key.
 
 ## Files
 
