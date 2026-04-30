@@ -397,8 +397,61 @@ select:focus {
   grid-column: 1 / -1;
 }
 
-#currentAffair {
+.user-idea {
+  grid-column: 1 / -1;
+}
+
+#currentAffair,
+#userIdea {
   min-height: 76px;
+}
+
+.workflow-rail {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.workflow-step {
+  min-height: 62px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fff;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 850;
+}
+
+.workflow-step strong {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--ink-soft);
+  color: #46514c;
+  font-size: 0.78rem;
+}
+
+.workflow-step.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.workflow-step.active strong {
+  background: var(--accent);
+  color: #fff;
+}
+
+.workflow-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .draft-layout {
@@ -413,6 +466,27 @@ select:focus {
   color: #16231f;
   font-size: 1.02rem;
   line-height: 1.55;
+}
+
+.workflow-outputs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.workflow-outputs textarea {
+  min-height: 190px;
+  background: #fff;
+}
+
+.workflow-outputs .final-output {
+  grid-column: 1 / -1;
+}
+
+#finalOutput {
+  min-height: 230px;
+  background: #fffefb;
+  border-color: var(--line-strong);
 }
 
 .draft-metrics {
@@ -580,7 +654,9 @@ select:focus {
 
   .topic-grid,
   .angle-row,
-  .composer-controls {
+  .composer-controls,
+  .workflow-rail,
+  .workflow-outputs {
     grid-template-columns: 1fr;
   }
 

@@ -164,6 +164,7 @@ function buildPrompt(payload) {
   const topic = sanitizeText(payload.topic?.title, "AI at work");
   const pillar = sanitizeText(payload.topic?.pillar, "AI at Work");
   const angle = sanitizeText(payload.angle, "Teach");
+  const userIdea = sanitizeBlock(payload.userIdea, "", 3500);
   const voice = payload.voice || {};
   const personalStyle = payload.personalStyle || {};
   const generationSettings = payload.generationSettings || {};
@@ -195,6 +196,7 @@ function buildPrompt(payload) {
       `Topic: ${topic}`,
       `Pillar: ${pillar}`,
       `Angle: ${angle}`,
+      `User idea: ${userIdea || "No additional user idea supplied."}`,
       `Audience: ${sanitizeText(voice.audience, "product, design, engineering, strategy, and AI leaders")}`,
       `Tone: ${sanitizeText(voice.tone, "authoritative but conversational, grounded in real experience")}`,
       `Point of view: ${sanitizeText(voice.pointOfView, "AI creates advantage when product teams redesign decisions and workflows, not when they sprinkle tools on old processes")}`,
@@ -223,6 +225,7 @@ function buildPrompt(payload) {
       "",
       "Write one publish-ready LinkedIn post with:",
       "- A scroll-stopping opening hook.",
+      "- If a user idea is supplied, make it the core input rather than treating it as a side note.",
       "- A structured body: insight, concrete example, implication.",
       "- A closing question that invites thoughtful replies.",
       "- 130-220 words.",
@@ -237,6 +240,7 @@ function fallbackPost(payload) {
   const topicPhrase = title ? title.charAt(0).toLowerCase() + title.slice(1) : title;
   const pillar = sanitizeText(topic.pillar, "AI at Work");
   const angle = sanitizeText(payload.angle, "Teach");
+  const userIdea = sanitizeText(payload.userIdea);
   const voice = payload.voice || {};
   const personalStyle = payload.personalStyle || {};
   const generationSettings = payload.generationSettings || {};
@@ -245,6 +249,9 @@ function fallbackPost(payload) {
   const currentTrigger = sanitizeText(generationSettings.currentAffair);
   const hasStyleSamples = sanitizeText(personalStyle.samples).length > 0;
   const triggerPhrase = currentTrigger ? currentTrigger.split(/[.!?\n]/)[0].trim() : topicPhrase;
+  const ideaLine = userIdea
+    ? `The starting point is simple: ${userIdea}`
+    : `The useful conversation starts with ${topicPhrase}.`;
   const audience = sanitizeText(voice.audience, "product and AI leaders");
   const pointOfView = sanitizeText(
     voice.pointOfView,
@@ -352,6 +359,8 @@ function fallbackPost(payload) {
   return [
     hook,
     "",
+    ideaLine,
+    "",
     middleByAngle[angle] || middleByAngle.Teach,
     "",
     styleModeLine[styleMode] || styleModeLine.Balanced,
@@ -362,6 +371,208 @@ function fallbackPost(payload) {
       ? "Which side of this debate are you on?"
       : "Where are you seeing AI actually change the way work gets done, not just the interface around it?"
   ].join("\n");
+}
+
+function buildWorkflowPrompt(payload) {
+  const stage = sanitizeText(payload.stage, "critique");
+  const topic = sanitizeText(payload.topic?.title, "AI at work");
+  const pillar = sanitizeText(payload.topic?.pillar, "AI at Work");
+  const angle = sanitizeText(payload.angle, "Teach");
+  const userIdea = sanitizeBlock(payload.userIdea, "", 3500);
+  const draft = sanitizeBlock(payload.draft, "", 9000);
+  const critique = sanitizeBlock(payload.critique, "", 5000);
+  const rewrite = sanitizeBlock(payload.rewrite, "", 9000);
+  const voice = payload.voice || {};
+  const personalStyle = payload.personalStyle || {};
+  const generationSettings = payload.generationSettings || {};
+  const styleMode = sanitizeText(generationSettings.styleMode, "Balanced");
+  const viralityMode = sanitizeText(generationSettings.viralityMode, "Insight-led");
+  const currentTrigger = sanitizeBlock(generationSettings.currentAffair, "", 2500);
+  const styleInstructions = sanitizeBlock(
+    personalStyle.instructions,
+    "Use a reflective, strategic, senior product leader voice with concrete analogies and original insight."
+  );
+  const styleSamples = sanitizeBlock(personalStyle.samples, "No sample posts provided.", 12000);
+
+  const stageInstructions = {
+    critique: [
+      "Critique the draft as a senior LinkedIn editor.",
+      "Return concise, actionable notes only.",
+      "Cover hook, clarity, originality, structure, brand fit, style fit, and one rewrite direction.",
+      "Do not rewrite the full post in this step."
+    ].join(" "),
+    rewrite: [
+      "Rewrite the draft using the critique.",
+      "Preserve the author's point of view and personal style, but make the argument sharper and more original.",
+      "Return only the rewritten LinkedIn post, with natural line breaks."
+    ].join(" "),
+    polish: [
+      "Final polish the rewritten post for publishing.",
+      "Tighten the hook, remove filler, improve rhythm, keep the author's voice, and make the closing question sharper.",
+      "Return only the final LinkedIn post."
+    ].join(" ")
+  };
+
+  return {
+    system: [
+      "You are an expert LinkedIn editor for a Product x AI personal brand.",
+      "Use sample posts only to infer style, rhythm, structure, and level of depth. Do not copy distinctive sentences, examples, or wording from the samples.",
+      "Keep the author's voice original, strategic, grounded, and senior."
+    ].join(" "),
+    user: [
+      `Workflow stage: ${stage}`,
+      `Stage instruction: ${stageInstructions[stage] || stageInstructions.critique}`,
+      `Topic: ${topic}`,
+      `Pillar: ${pillar}`,
+      `Angle: ${angle}`,
+      `User idea: ${userIdea || "No additional user idea supplied."}`,
+      `Style Mode: ${styleMode}`,
+      `Virality Lens: ${viralityMode}`,
+      `Current trigger: ${currentTrigger || "None supplied."}`,
+      `Audience: ${sanitizeText(voice.audience, "product, design, engineering, strategy, and AI leaders")}`,
+      `Tone: ${sanitizeText(voice.tone, "authoritative but conversational, grounded in real experience")}`,
+      `Point of view: ${sanitizeText(voice.pointOfView, "AI creates advantage when product teams redesign decisions and workflows, not when they sprinkle tools on old processes")}`,
+      `Credibility signals: ${sanitizeText(voice.credentials, "PM lens, enterprise and consumer product judgment, applied AI operating experience")}`,
+      `Avoid: ${sanitizeText(voice.avoid, "jargon, breathless hype, em dashes, generic thought leadership")}`,
+      "",
+      "Personal writing instructions:",
+      styleInstructions,
+      "",
+      "Reference sample posts for tone calibration:",
+      styleSamples,
+      "",
+      "Current draft:",
+      draft || "No draft supplied.",
+      "",
+      "Critique notes:",
+      critique || "No critique supplied.",
+      "",
+      "Rewrite version:",
+      rewrite || "No rewrite supplied."
+    ].join("\n")
+  };
+}
+
+function fallbackWorkflowText(payload) {
+  const stage = sanitizeText(payload.stage, "critique");
+  if (stage === "critique") {
+    return fallbackCritique(payload);
+  }
+
+  if (stage === "rewrite") {
+    return fallbackRewrite(payload);
+  }
+
+  if (stage === "polish") {
+    return fallbackPolish(payload);
+  }
+
+  return "";
+}
+
+function fallbackCritique(payload) {
+  const draft = sanitizeText(payload.draft);
+  const words = draft ? draft.split(/\s+/).length : 0;
+  const hasIdea = Boolean(sanitizeText(payload.userIdea));
+  const hasQuestion = draft.includes("?");
+
+  return [
+    "Hook: Make the first line sharper and more specific. It should create tension before it explains.",
+    `Core idea: ${hasIdea ? "The draft has a user idea to build from; make the implication more explicit." : "Add a concrete user idea or lived trigger to make the post more ownable."}`,
+    "Structure: Move from observation to tension to implication. Remove repetition.",
+    "Originality: Name the hidden bottleneck, trade-off, or human behavior underneath the topic.",
+    `Engagement: ${hasQuestion ? "The closing question is present; make it more debatable." : "Add a closing question that invites a point of view."}`,
+    `Length: ${words} words. Aim for 130-220 words unless the story needs more room.`,
+    "Rewrite direction: Lead with the strongest tension, add one concrete example or analogy, then land the product/leadership implication."
+  ].join("\n");
+}
+
+function fallbackRewrite(payload) {
+  const idea = sanitizeText(payload.userIdea, payload.topic?.title || "this AI shift");
+  const voice = payload.voice || {};
+  const audience = sanitizeText(voice.audience, "product and AI leaders");
+  const pointOfView = sanitizeText(
+    voice.pointOfView,
+    "AI creates advantage when teams redesign decisions and workflows, not when they simply add another tool"
+  );
+
+  return [
+    `The visible story is ${idea}.`,
+    "",
+    "The deeper story is usually less convenient.",
+    "",
+    "Most teams look at AI through the lens of capability: what can the model do, how fast can it do it, and where can we plug it into the workflow?",
+    "",
+    "But capability is rarely the real bottleneck.",
+    "",
+    "The harder question is whether the surrounding system is ready for the change: incentives, handoffs, governance, trust, and the human judgment that still has to sit between the model and the outcome.",
+    "",
+    `For ${audience}, the implication is direct: ${pointOfView}.`,
+    "",
+    "Do not just ask what AI can automate. Ask what decision, behavior, or operating rhythm needs to be redesigned because AI is now part of the system.",
+    "",
+    "Where do you think teams are still confusing AI capability with AI readiness?"
+  ].join("\n");
+}
+
+function fallbackPolish(payload) {
+  const source = sanitizeBlock(payload.rewrite || payload.draft, "", 9000);
+  return source
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/\s+$/gm, "")
+    .replace(/very /gi, "")
+    .replace(/really /gi, "")
+    .trim();
+}
+
+async function runWorkflowStage(payload) {
+  const apiKey = getAnthropicApiKey();
+  if (!apiKey.value) {
+    return {
+      text: fallbackWorkflowText(payload),
+      provider: "local",
+      model: "local-brand-engine"
+    };
+  }
+
+  const prompt = buildWorkflowPrompt(payload);
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-api-key": apiKey.value,
+      "anthropic-version": "2023-06-01"
+    },
+    body: JSON.stringify({
+      model: CLAUDE_MODEL,
+      max_tokens: 1100,
+      temperature: 0.72,
+      system: prompt.system,
+      messages: [{ role: "user", content: prompt.user }]
+    })
+  });
+
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(`Claude workflow request failed: ${response.status} ${detail}`);
+  }
+
+  const data = await response.json();
+  const text = (data.content || [])
+    .filter((part) => part.type === "text")
+    .map((part) => part.text)
+    .join("\n")
+    .trim();
+
+  if (!text) {
+    throw new Error("Claude returned an empty workflow result");
+  }
+
+  return {
+    text,
+    provider: "claude",
+    model: data.model || CLAUDE_MODEL
+  };
 }
 
 async function generatePost(payload) {
@@ -456,6 +667,25 @@ const server = http.createServer(async (req, res) => {
       } catch (error) {
         sendJson(res, 200, {
           post: fallbackPost(payload),
+          provider: "local",
+          model: "local-brand-engine",
+          warning: error.message
+        });
+      }
+    } catch (error) {
+      sendJson(res, 400, { error: error.message });
+    }
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/api/workflow") {
+    try {
+      const payload = JSON.parse(await readBody(req));
+      try {
+        sendJson(res, 200, await runWorkflowStage(payload));
+      } catch (error) {
+        sendJson(res, 200, {
+          text: fallbackWorkflowText(payload),
           provider: "local",
           model: "local-brand-engine",
           warning: error.message

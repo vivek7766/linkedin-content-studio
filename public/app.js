@@ -125,12 +125,18 @@ const DEFAULT_GENERATION_SETTINGS = {
   currentAffair: ""
 };
 
+const DEFAULT_WORKFLOW = {
+  userIdea: "",
+  activeStage: "idea"
+};
+
 const state = {
   selectedTopicId: TOPICS[0].id,
   selectedAngle: "Teach",
   voice: loadJson("linkedinStudioVoice", DEFAULT_VOICE),
   personalStyle: ensurePersonalStyleSamples(loadJson("linkedinStudioPersonalStyle", DEFAULT_PERSONAL_STYLE)),
   generationSettings: ensureGenerationSettings(loadJson("linkedinStudioGenerationSettings", DEFAULT_GENERATION_SETTINGS)),
+  workflow: loadJson("linkedinStudioWorkflow", DEFAULT_WORKFLOW),
   history: loadJson("linkedinStudioHistory", [])
 };
 saveJson("linkedinStudioPersonalStyle", state.personalStyle);
@@ -166,7 +172,14 @@ const elements = {
   sampleCount: document.querySelector("#sampleCount"),
   sampleWordCount: document.querySelector("#sampleWordCount"),
   viralityMode: document.querySelector("#viralityMode"),
-  currentAffair: document.querySelector("#currentAffair")
+  currentAffair: document.querySelector("#currentAffair"),
+  userIdea: document.querySelector("#userIdea"),
+  critiqueButton: document.querySelector("#critiqueButton"),
+  rewriteButton: document.querySelector("#rewriteButton"),
+  polishButton: document.querySelector("#polishButton"),
+  critiqueOutput: document.querySelector("#critiqueOutput"),
+  rewriteOutput: document.querySelector("#rewriteOutput"),
+  finalOutput: document.querySelector("#finalOutput")
 };
 
 function loadJson(key, fallback) {
@@ -297,6 +310,14 @@ function renderGenerationSettings() {
   elements.currentAffair.value = state.generationSettings.currentAffair;
 }
 
+function renderWorkflow() {
+  elements.userIdea.value = state.workflow.userIdea || "";
+  document.querySelectorAll(".workflow-step").forEach((step) => {
+    step.classList.toggle("active", step.dataset.workflowStage === state.workflow.activeStage);
+  });
+  updateWorkflowControls();
+}
+
 function renderHistory() {
   const now = new Date();
   const thisMonth = now.getMonth();
@@ -336,10 +357,10 @@ function renderHistory() {
 }
 
 function renderMetrics() {
-  const text = elements.draftOutput.value.trim();
+  const text = getPublishableDraft();
   const words = text ? text.split(/\s+/).length : 0;
   elements.wordCount.textContent = `${words} ${words === 1 ? "word" : "words"}`;
-  elements.charCount.textContent = `${elements.draftOutput.value.length} chars`;
+  elements.charCount.textContent = `${text.length} chars`;
 }
 
 function renderSampleMetrics() {
@@ -358,6 +379,7 @@ function renderAll() {
   renderVoice();
   renderPersonalStyle();
   renderGenerationSettings();
+  renderWorkflow();
   renderHistory();
   renderMetrics();
 }
@@ -391,11 +413,55 @@ function syncGenerationSettingsFromInputs() {
   saveJson("linkedinStudioGenerationSettings", state.generationSettings);
 }
 
-async function generatePost() {
+function syncWorkflowFromInputs() {
+  state.workflow = {
+    ...state.workflow,
+    userIdea: elements.userIdea.value.trim()
+  };
+  saveJson("linkedinStudioWorkflow", state.workflow);
+}
+
+function setWorkflowStage(stage) {
+  state.workflow = {
+    ...state.workflow,
+    activeStage: stage
+  };
+  saveJson("linkedinStudioWorkflow", state.workflow);
+  renderWorkflow();
+}
+
+function getPublishableDraft() {
+  return (
+    elements.finalOutput.value.trim() ||
+    elements.rewriteOutput.value.trim() ||
+    elements.draftOutput.value.trim()
+  );
+}
+
+function getWorkflowPayload() {
   const topic = getSelectedTopic();
   syncVoiceFromInputs();
   syncPersonalStyleFromInputs();
   syncGenerationSettingsFromInputs();
+  syncWorkflowFromInputs();
+
+  return {
+    topic,
+    angle: state.selectedAngle,
+    voice: state.voice,
+    personalStyle: state.personalStyle,
+    generationSettings: state.generationSettings,
+    userIdea: state.workflow.userIdea,
+    draft: elements.draftOutput.value.trim(),
+    critique: elements.critiqueOutput.value.trim(),
+    rewrite: elements.rewriteOutput.value.trim(),
+    final: elements.finalOutput.value.trim(),
+    history: state.history
+  };
+}
+
+async function generatePost() {
+  const payload = getWorkflowPayload();
   setBusy(true);
   elements.providerBadge.textContent = "Drafting";
 
@@ -403,14 +469,7 @@ async function generatePost() {
     const response = await fetch("/api/generate", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        topic,
-        angle: state.selectedAngle,
-        voice: state.voice,
-        personalStyle: state.personalStyle,
-        generationSettings: state.generationSettings,
-        history: state.history
-      })
+      body: JSON.stringify(payload)
     });
 
     if (!response.ok) {
@@ -419,18 +478,27 @@ async function generatePost() {
 
     const data = await response.json();
     elements.draftOutput.value = data.post || "";
+    elements.critiqueOutput.value = "";
+    elements.rewriteOutput.value = "";
+    elements.finalOutput.value = "";
     elements.providerBadge.textContent = data.provider === "claude" ? "Claude draft" : "Local draft";
+    setWorkflowStage("draft");
     renderMetrics();
     showToast(data.provider === "claude" ? "Claude draft ready." : "Local draft ready.");
   } catch (error) {
     elements.draftOutput.value = createLocalDraft(
-      topic,
+      payload.topic,
       state.selectedAngle,
       state.voice,
       state.personalStyle,
-      state.generationSettings
+      state.generationSettings,
+      state.workflow.userIdea
     );
+    elements.critiqueOutput.value = "";
+    elements.rewriteOutput.value = "";
+    elements.finalOutput.value = "";
     elements.providerBadge.textContent = "Local draft";
+    setWorkflowStage("draft");
     renderMetrics();
     showToast("Local draft ready.");
   } finally {
@@ -438,7 +506,101 @@ async function generatePost() {
   }
 }
 
-function createLocalDraft(topic, angle, voice, personalStyle = {}, generationSettings = DEFAULT_GENERATION_SETTINGS) {
+async function runWorkflowStage(stage) {
+  const payload = getWorkflowPayload();
+
+  if (stage === "critique" && !payload.draft) {
+    showToast("Generate or write a draft first.");
+    return;
+  }
+
+  if (stage === "rewrite" && !payload.draft) {
+    showToast("Generate or write a draft first.");
+    return;
+  }
+
+  if (stage === "rewrite" && !payload.critique) {
+    showToast("Critique the draft first.");
+    return;
+  }
+
+  if (stage === "polish" && !payload.rewrite) {
+    showToast("Rewrite the draft first.");
+    return;
+  }
+
+  setBusy(true);
+  elements.providerBadge.textContent = stage === "polish" ? "Polishing" : stage === "rewrite" ? "Rewriting" : "Critiquing";
+
+  try {
+    const response = await fetch("/api/workflow", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ...payload, stage })
+    });
+
+    if (!response.ok) {
+      throw new Error("Workflow request failed");
+    }
+
+    const data = await response.json();
+    applyWorkflowResult(stage, data.text || "");
+    elements.providerBadge.textContent =
+      data.provider === "claude" ? `Claude ${getStageLabel(stage).toLowerCase()}` : `Local ${getStageLabel(stage).toLowerCase()}`;
+    showToast(`${getStageLabel(stage)} ready.`);
+  } catch (error) {
+    applyWorkflowResult(stage, createLocalWorkflowText(stage, payload));
+    elements.providerBadge.textContent = `Local ${getStageLabel(stage).toLowerCase()}`;
+    showToast(`${getStageLabel(stage)} ready.`);
+  } finally {
+    setBusy(false);
+  }
+}
+
+function applyWorkflowResult(stage, text) {
+  if (stage === "critique") {
+    elements.critiqueOutput.value = text;
+  }
+
+  if (stage === "rewrite") {
+    elements.rewriteOutput.value = text;
+    elements.finalOutput.value = "";
+  }
+
+  if (stage === "polish") {
+    elements.finalOutput.value = text;
+  }
+
+  setWorkflowStage(stage);
+  renderMetrics();
+}
+
+function getStageLabel(stage) {
+  const labels = {
+    critique: "Critique",
+    rewrite: "Rewrite",
+    polish: "Final polish"
+  };
+  return labels[stage] || "Workflow step";
+}
+
+function createLocalWorkflowText(stage, payload) {
+  if (stage === "critique") {
+    return createLocalCritique(payload);
+  }
+
+  if (stage === "rewrite") {
+    return createLocalRewrite(payload);
+  }
+
+  if (stage === "polish") {
+    return createLocalPolish(payload);
+  }
+
+  return "";
+}
+
+function createLocalDraft(topic, angle, voice, personalStyle = {}, generationSettings = DEFAULT_GENERATION_SETTINGS, userIdea = "") {
   const title = topic.title || "How AI changes product work";
   const topicPhrase = title.charAt(0).toLowerCase() + title.slice(1);
   const pillar = topic.pillar || "AI at Work";
@@ -452,6 +614,9 @@ function createLocalDraft(topic, angle, voice, personalStyle = {}, generationSet
 
   const hasStyleSamples = Boolean((personalStyle.samples || "").trim());
   const triggerPhrase = currentTrigger ? currentTrigger.split(/[.!?\n]/)[0].trim() : topicPhrase;
+  const ideaLine = userIdea
+    ? `The starting point is simple: ${userIdea}`
+    : `The useful conversation starts with ${topicPhrase}.`;
   const hooks = {
     Teach: [
       `Most teams are asking the wrong first question about ${topicPhrase}.`,
@@ -550,6 +715,8 @@ function createLocalDraft(topic, angle, voice, personalStyle = {}, generationSet
   return [
     randomItem(hooks[angle] || hooks.Teach),
     "",
+    ideaLine,
+    "",
     body[angle] || body.Teach,
     "",
     styleModeLine[styleMode] || styleModeLine.Balanced,
@@ -562,8 +729,74 @@ function createLocalDraft(topic, angle, voice, personalStyle = {}, generationSet
   ].join("\n");
 }
 
+function createLocalCritique(payload) {
+  const draft = payload.draft || "";
+  const words = draft ? draft.split(/\s+/).length : 0;
+  const hasQuestion = /\?\s*$/.test(draft.trim()) || draft.includes("?");
+  const hasIdea = Boolean((payload.userIdea || "").trim());
+
+  return [
+    "Hook: Make the first line sharper and more specific. It should create tension before it explains.",
+    `Core idea: ${hasIdea ? "The draft uses the user idea, but the implication can be made more explicit." : "The draft would be stronger with a concrete user idea or lived trigger."}`,
+    "Structure: Keep the post moving from observation to tension to implication. Remove any paragraph that only repeats the same claim.",
+    "Originality: Push beyond a generic AI/product lesson. Name the hidden bottleneck, trade-off, or human behavior underneath.",
+    `Engagement: ${hasQuestion ? "The closing question is present; make it more debatable." : "Add a closing question that invites a point of view."}`,
+    `Length: ${words} words. Aim for 130-220 words unless the story needs more room.`,
+    "Rewrite direction: Start with the strongest tension, add one concrete example or analogy, then end with a crisp leadership/product implication."
+  ].join("\n");
+}
+
+function createLocalRewrite(payload) {
+  const source = payload.draft || createLocalDraft(
+    payload.topic,
+    payload.angle,
+    payload.voice,
+    payload.personalStyle,
+    payload.generationSettings,
+    payload.userIdea
+  );
+  const idea = payload.userIdea || payload.topic.title;
+  const firstLine = payload.generationSettings.viralityMode === "Debate spark"
+    ? `What if the obvious take on ${idea.toLowerCase()} is the wrong one?`
+    : `The visible story is ${idea}.`;
+
+  return [
+    firstLine,
+    "",
+    "The deeper story is usually less convenient.",
+    "",
+    "Most teams look at AI through the lens of capability: what can the model do, how fast can it do it, and where can we plug it into the workflow?",
+    "",
+    "But capability is rarely the real bottleneck.",
+    "",
+    "The harder question is whether the surrounding system is ready for the change: incentives, handoffs, governance, trust, and the human judgment that still has to sit between the model and the outcome.",
+    "",
+    "This is where many AI efforts lose momentum. They improve one node in the chain while the rest of the organization continues to run on old assumptions.",
+    "",
+    "The lesson for product and leadership teams is simple: do not just ask what AI can automate.",
+    "",
+    "Ask what decision, behavior, or operating rhythm needs to be redesigned because AI is now part of the system.",
+    "",
+    "Where do you think teams are still confusing AI capability with AI readiness?"
+  ].join("\n");
+}
+
+function createLocalPolish(payload) {
+  const source = payload.rewrite || payload.draft || "";
+  if (!source.trim()) {
+    return "";
+  }
+
+  return source
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/\s+$/gm, "")
+    .replace(/very /gi, "")
+    .replace(/really /gi, "")
+    .trim();
+}
+
 function saveToTracker() {
-  const draft = elements.draftOutput.value.trim();
+  const draft = getPublishableDraft();
   if (!draft) {
     showToast("Generate or write a post first.");
     return;
@@ -588,7 +821,7 @@ function saveToTracker() {
 }
 
 async function copyDraft() {
-  const draft = elements.draftOutput.value.trim();
+  const draft = getPublishableDraft();
   if (!draft) {
     showToast("Nothing to copy yet.");
     return;
@@ -620,7 +853,18 @@ function surpriseMe() {
 
 function setBusy(isBusy) {
   elements.generateButton.disabled = isBusy;
+  updateWorkflowControls(isBusy);
   elements.generateButton.textContent = isBusy ? "Generating" : "Generate post";
+}
+
+function updateWorkflowControls(isBusy = false) {
+  const hasDraft = Boolean(elements.draftOutput.value.trim());
+  const hasCritique = Boolean(elements.critiqueOutput.value.trim());
+  const hasRewrite = Boolean(elements.rewriteOutput.value.trim());
+
+  elements.critiqueButton.disabled = isBusy || !hasDraft;
+  elements.rewriteButton.disabled = isBusy || !hasDraft || !hasCritique;
+  elements.polishButton.disabled = isBusy || !hasRewrite;
 }
 
 function showToast(message) {
@@ -687,12 +931,22 @@ document.querySelectorAll(".mode-button").forEach((button) => {
   input.addEventListener("change", syncGenerationSettingsFromInputs);
 });
 
+elements.userIdea.addEventListener("input", syncWorkflowFromInputs);
 elements.pillarFilter.addEventListener("change", renderTopics);
 elements.surpriseButton.addEventListener("click", surpriseMe);
 elements.generateButton.addEventListener("click", generatePost);
+elements.critiqueButton.addEventListener("click", () => runWorkflowStage("critique"));
+elements.rewriteButton.addEventListener("click", () => runWorkflowStage("rewrite"));
+elements.polishButton.addEventListener("click", () => runWorkflowStage("polish"));
 elements.copyButton.addEventListener("click", copyDraft);
 elements.saveButton.addEventListener("click", saveToTracker);
-elements.draftOutput.addEventListener("input", renderMetrics);
+[elements.draftOutput, elements.rewriteOutput, elements.finalOutput].forEach((input) => {
+  input.addEventListener("input", () => {
+    renderMetrics();
+    renderWorkflow();
+  });
+});
+elements.critiqueOutput.addEventListener("input", () => setWorkflowStage("critique"));
 elements.resetVoiceButton.addEventListener("click", () => {
   state.voice = structuredClone(DEFAULT_VOICE);
   saveJson("linkedinStudioVoice", state.voice);

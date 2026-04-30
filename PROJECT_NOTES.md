@@ -117,6 +117,12 @@ This endpoint returns whether Claude generation is active, which supported key n
   - Anecdote-led
   - Debate spark
 - Current trigger field for a headline, current event, or live observation.
+- Writing workflow:
+  - User idea
+  - Generate draft
+  - Critique draft
+  - Rewrite draft
+  - Final polish
 - Draft word/character count.
 - Copy draft button.
 - Save to tracker button.
@@ -131,6 +137,22 @@ Topic + Angle + Brand Voice + Personal Style + Style Mode + Virality Lens + Curr
 ```
 
 Brand Voice handles strategic positioning. Personal Style handles writing fingerprint and rhythm. Style Mode controls which one gets more weight.
+
+The workflow path is:
+
+```text
+User idea -> Generate draft -> Critique draft -> Rewrite draft -> Final polish
+```
+
+The browser stores the user idea locally. `Copy` and `Save to tracker` prefer the final polished post, then the rewrite, then the original draft.
+
+Server endpoints:
+
+```text
+POST /api/generate
+POST /api/workflow
+GET /api/health
+```
 
 The Current Affairs and Virality controls do not fetch or invent news. The user should paste a current trigger/headline if they want topical commentary.
 
