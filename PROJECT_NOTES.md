@@ -6,7 +6,7 @@
 
 ## Purpose
 
-This is a local LinkedIn content studio for building a Product x AI personal brand. It helps move from topic idea to publish-ready LinkedIn draft, using saved brand voice, personal writing samples, style controls, and post history.
+This is a local LinkedIn content studio for building profile-specific personal brands. It helps move from topic idea to publish-ready LinkedIn draft, using a selected professional profile, saved voice, reference samples/articles, style controls, and post history.
 
 ## How To Run
 
@@ -89,27 +89,40 @@ This endpoint returns whether Claude generation is active, which supported key n
   - Consumer AI
   - Leadership in the Age of AI
   - Current Affairs
+  - Founder Operating Systems
+  - Consulting and Advisory
+  - Market Analysis
+  - Engineering and AI Systems
+  - Supply Chain Leadership
+  - Leadership Systems
+- Profile selector:
+  - Product x AI Leader
+  - Entrepreneur / Founder
+  - Consultant / Analyst
+  - GenAI Engineer
+  - Supply Chain Leader
+  - Enterprise Leader
 - Pillar filter and "Surprise me" topic/angle picker.
 - Post Composer with angle options:
   - Teach
   - Challenge
   - Personal story
   - Hot take
-- Brand Voice panel:
+- Profile Voice panel:
   - Tone
   - Audience
   - Point of view
   - Credibility
   - Avoid
-- Personal Style panel:
+- Tone Samples panel:
   - Writing rules
-  - Sample posts
+  - Sample posts or articles
   - Reset button
   - Sample and word count
 - Style Mode control:
   - Balanced
-  - Brand-led
-  - Style-led
+  - Profile-led
+  - Tone-led
 - Virality Lens control:
   - Insight-led
   - Current affairs
@@ -133,10 +146,10 @@ This endpoint returns whether Claude generation is active, which supported key n
 The generator combines:
 
 ```text
-Topic + Angle + Brand Voice + Personal Style + Style Mode + Virality Lens + Current trigger + Post History
+Selected Profile + Topic + Angle + Profile Voice + Tone Samples + Style Mode + Virality Lens + Current trigger + Post History
 ```
 
-Brand Voice handles strategic positioning. Personal Style handles writing fingerprint and rhythm. Style Mode controls which one gets more weight.
+Profile Voice handles strategic positioning for the selected user type. Tone Samples handle writing fingerprint and rhythm. Style Mode controls which one gets more weight.
 
 The workflow path is:
 
@@ -144,7 +157,7 @@ The workflow path is:
 User idea -> Generate draft -> Critique draft -> Rewrite draft -> Final polish
 ```
 
-The browser stores the user idea locally. `Copy` and `Save to tracker` prefer the final polished post, then the rewrite, then the original draft.
+The browser stores the selected profile, profile-specific voice/sample overrides, and the user idea locally. `Copy` and `Save to tracker` prefer the final polished post, then the rewrite, then the original draft.
 
 Server endpoints:
 
@@ -156,9 +169,9 @@ GET /api/health
 
 The Current Affairs and Virality controls do not fetch or invent news. The user should paste a current trigger/headline if they want topical commentary.
 
-## Personal Writing Samples Already Seeded
+## Tone Samples Already Seeded
 
-The Personal Style sample bank currently includes six sample posts:
+The Product x AI Leader tone sample bank currently includes six sample posts:
 
 1. Vande Bharat / AI Paradox / enterprise ROI and structural process debt.
 2. AI post-scarcity / democratizes intelligence but not prosperity.
@@ -201,7 +214,7 @@ Replace `YOUR_REPO_NAME` with the chosen GitHub repository name.
 ## Suggested Next Improvements
 
 - Add explicit prompt preview/debug panel for generated Claude prompt.
-- Add export/import for Brand Voice, Personal Style, and history.
+- Add export/import for Profile Voice, Tone Samples, selected profile, and history.
 - Add delete/edit controls for tracker entries.
 - Add optional topic bank editor.
 - Add a README for GitHub with screenshots and setup instructions.
