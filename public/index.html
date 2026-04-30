@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LinkedIn Content Studio</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Product x AI</p>
+          <h1>LinkedIn Content Studio</h1>
+        </div>
+        <div class="week-pill" id="weekLabel"></div>
+      </header>
+
+      <main class="studio-grid">
+        <aside class="sidebar" aria-label="Brand voice and tracker">
+          <section class="panel voice-panel">
+            <div class="panel-heading">
+              <h2>Brand Voice</h2>
+              <button class="icon-button" id="resetVoiceButton" type="button" aria-label="Reset brand voice" title="Reset brand voice">
+                <span aria-hidden="true">R</span>
+              </button>
+            </div>
+
+            <label>
+              Tone
+              <input id="voiceTone" type="text" autocomplete="off" />
+            </label>
+            <label>
+              Audience
+              <input id="voiceAudience" type="text" autocomplete="off" />
+            </label>
+            <label>
+              Point of view
+              <textarea id="voicePointOfView" rows="4"></textarea>
+            </label>
+            <label>
+              Credibility
+              <textarea id="voiceCredentials" rows="3"></textarea>
+            </label>
+            <label>
+              Avoid
+              <input id="voiceAvoid" type="text" autocomplete="off" />
+            </label>
+          </section>
+
+          <section class="panel style-panel">
+            <div class="panel-heading">
+              <h2>Personal Style</h2>
+              <button class="icon-button" id="resetStyleButton" type="button" aria-label="Reset personal style" title="Reset personal style">
+                <span aria-hidden="true">R</span>
+              </button>
+            </div>
+            <label>
+              Writing rules
+              <textarea id="styleInstructions" rows="6"></textarea>
+            </label>
+            <label>
+              Sample posts
+              <textarea id="styleSamples" rows="10" spellcheck="true"></textarea>
+            </label>
+            <div class="style-meter">
+              <span id="sampleCount">0 samples</span>
+              <span id="sampleWordCount">0 words</span>
+            </div>
+          </section>
+
+          <section class="panel tracker-panel">
+            <div class="panel-heading">
+              <h2>Tracker</h2>
+              <span class="count-badge" id="historyCount">0</span>
+            </div>
+            <div class="tracker-stats">
+              <div>
+                <strong id="postedThisMonth">0</strong>
+                <span>This month</span>
+              </div>
+              <div>
+                <strong id="topicCoverage">0</strong>
+                <span>Pillars</span>
+              </div>
+            </div>
+            <div class="history-list" id="historyList"></div>
+          </section>
+        </aside>
+
+        <section class="workspace">
+          <section class="tool-band topic-band">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">Topic Generator</p>
+                <h2>Pick this week's angle</h2>
+              </div>
+              <div class="heading-actions">
+                <select id="pillarFilter" aria-label="Filter by pillar">
+                  <option value="All">All pillars</option>
+                </select>
+                <button class="secondary-button" id="surpriseButton" type="button">Surprise me</button>
+              </div>
+            </div>
+            <div class="topic-grid" id="topicGrid"></div>
+          </section>
+
+          <section class="tool-band composer-band">
+            <div class="composer-header">
+              <div>
+                <p class="eyebrow">Post Composer</p>
+                <h2 id="selectedTopicTitle">Select a topic</h2>
+                <p id="selectedTopicMeta" class="muted"></p>
+              </div>
+              <div class="provider-badge" id="providerBadge">Local ready</div>
+            </div>
+
+            <div class="angle-row" role="radiogroup" aria-label="Post angle">
+              <button class="angle-button active" type="button" data-angle="Teach">Teach</button>
+              <button class="angle-button" type="button" data-angle="Challenge">Challenge</button>
+              <button class="angle-button" type="button" data-angle="Personal story">Personal story</button>
+              <button class="angle-button" type="button" data-angle="Hot take">Hot take</button>
+            </div>
+
+            <div class="composer-controls">
+              <div class="control-field">
+                <span class="control-label">Style Mode</span>
+                <div class="mode-row" role="radiogroup" aria-label="Style mode">
+                  <button class="mode-button active" type="button" data-style-mode="Balanced">Balanced</button>
+                  <button class="mode-button" type="button" data-style-mode="Brand-led">Brand-led</button>
+                  <button class="mode-button" type="button" data-style-mode="Style-led">Style-led</button>
+                </div>
+              </div>
+              <label class="control-field">
+                Virality Lens
+                <select id="viralityMode" aria-label="Virality Lens">
+                  <option value="Insight-led">Insight-led</option>
+                  <option value="Current affairs">Current affairs</option>
+                  <option value="Contrarian commentary">Contrarian commentary</option>
+                  <option value="Anecdote-led">Anecdote-led</option>
+                  <option value="Debate spark">Debate spark</option>
+                </select>
+              </label>
+              <label class="control-field current-trigger">
+                Current trigger
+                <textarea id="currentAffair" rows="3" spellcheck="true"></textarea>
+              </label>
+            </div>
+
+            <div class="draft-layout">
+              <textarea id="draftOutput" rows="17" spellcheck="true"></textarea>
+              <div class="draft-toolbar">
+                <div class="draft-metrics">
+                  <span id="wordCount">0 words</span>
+                  <span id="charCount">0 chars</span>
+                </div>
+                <div class="draft-actions">
+                  <button class="secondary-button" id="copyButton" type="button">Copy</button>
+                  <button class="secondary-button" id="saveButton" type="button">Save to tracker</button>
+                  <button class="primary-button" id="generateButton" type="button">Generate post</button>
+                </div>
+              </div>
+            </div>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script src="./app.js"></script>
+  </body>
+</html>
