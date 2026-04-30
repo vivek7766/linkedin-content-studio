@@ -249,10 +249,67 @@ select:focus {
   background: var(--accent-strong);
 }
 
+.profile-band,
 .topic-band,
 .composer-band {
   display: grid;
   gap: 18px;
+}
+
+.profile-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.profile-card {
+  min-height: 128px;
+  display: grid;
+  align-content: space-between;
+  gap: 12px;
+  padding: 15px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fff;
+  text-align: left;
+  color: var(--text);
+  transition: border-color 160ms ease, transform 160ms ease, background 160ms ease;
+}
+
+.profile-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+
+.profile-card.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.profile-card strong {
+  display: block;
+  margin-bottom: 7px;
+  font-size: 1rem;
+  line-height: 1.18;
+}
+
+.profile-card span {
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.34;
+}
+
+.profile-chip {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 0 9px;
+  border-radius: 999px;
+  background: var(--ink-soft);
+  color: #46514c;
+  font-size: 0.74rem;
+  font-weight: 850;
 }
 
 .topic-grid {
@@ -604,6 +661,7 @@ select:focus {
 }
 
 @media (max-width: 1180px) {
+  .profile-grid,
   .topic-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -653,6 +711,7 @@ select:focus {
   }
 
   .topic-grid,
+  .profile-grid,
   .angle-row,
   .composer-controls,
   .workflow-rail,
