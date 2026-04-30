@@ -10,18 +10,18 @@
     <div class="app-shell">
       <header class="topbar">
         <div>
-          <p class="eyebrow">Product x AI</p>
+          <p class="eyebrow">Multi-profile brand engine</p>
           <h1>LinkedIn Content Studio</h1>
         </div>
         <div class="week-pill" id="weekLabel"></div>
       </header>
 
       <main class="studio-grid">
-        <aside class="sidebar" aria-label="Brand voice and tracker">
+        <aside class="sidebar" aria-label="Profile voice and tracker">
           <section class="panel voice-panel">
             <div class="panel-heading">
-              <h2>Brand Voice</h2>
-              <button class="icon-button" id="resetVoiceButton" type="button" aria-label="Reset brand voice" title="Reset brand voice">
+              <h2>Profile Voice</h2>
+              <button class="icon-button" id="resetVoiceButton" type="button" aria-label="Reset profile voice" title="Reset profile voice">
                 <span aria-hidden="true">R</span>
               </button>
             </div>
@@ -50,8 +50,8 @@
 
           <section class="panel style-panel">
             <div class="panel-heading">
-              <h2>Personal Style</h2>
-              <button class="icon-button" id="resetStyleButton" type="button" aria-label="Reset personal style" title="Reset personal style">
+              <h2>Tone Samples</h2>
+              <button class="icon-button" id="resetStyleButton" type="button" aria-label="Reset tone samples" title="Reset tone samples">
                 <span aria-hidden="true">R</span>
               </button>
             </div>
@@ -60,8 +60,8 @@
               <textarea id="styleInstructions" rows="6"></textarea>
             </label>
             <label>
-              Sample posts
-              <textarea id="styleSamples" rows="10" spellcheck="true"></textarea>
+              Sample posts or articles
+              <textarea id="styleSamples" rows="10" spellcheck="true" placeholder="Paste LinkedIn posts, article excerpts, newsletters, memos, or notes that capture the user's tone."></textarea>
             </label>
             <div class="style-meter">
               <span id="sampleCount">0 samples</span>
@@ -89,6 +89,17 @@
         </aside>
 
         <section class="workspace">
+          <section class="tool-band profile-band">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">Profile</p>
+                <h2>Choose who is writing</h2>
+                <p id="selectedProfileMeta" class="muted"></p>
+              </div>
+            </div>
+            <div class="profile-grid" id="profileGrid"></div>
+          </section>
+
           <section class="tool-band topic-band">
             <div class="section-heading">
               <div>
@@ -125,14 +136,14 @@
             <div class="composer-controls">
               <label class="control-field user-idea">
                 User idea
-                <textarea id="userIdea" rows="4" spellcheck="true"></textarea>
+                <textarea id="userIdea" rows="4" spellcheck="true" placeholder="Add the raw idea, thesis, client observation, operating lesson, or story seed."></textarea>
               </label>
               <div class="control-field">
                 <span class="control-label">Style Mode</span>
                 <div class="mode-row" role="radiogroup" aria-label="Style mode">
                   <button class="mode-button active" type="button" data-style-mode="Balanced">Balanced</button>
-                  <button class="mode-button" type="button" data-style-mode="Brand-led">Brand-led</button>
-                  <button class="mode-button" type="button" data-style-mode="Style-led">Style-led</button>
+                  <button class="mode-button" type="button" data-style-mode="Profile-led">Profile-led</button>
+                  <button class="mode-button" type="button" data-style-mode="Tone-led">Tone-led</button>
                 </div>
               </div>
               <label class="control-field">
