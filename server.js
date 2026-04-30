@@ -2,11 +2,26 @@ require("dotenv").config({ quiet: true });
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
 
 const PORT = Number(process.env.PORT || 4173);
 const HOST = process.env.HOST || "0.0.0.0";
 const ROOT = path.join(__dirname, "public");
 const CLAUDE_MODEL = process.env.CLAUDE_MODEL || "claude-sonnet-4-5";
+const ANALYTICS_FILE = process.env.ANALYTICS_FILE || path.join(__dirname, "data", "analytics-events.jsonl");
+const ANALYTICS_SALT = process.env.ANALYTICS_SALT || "linkedin-content-studio-analytics";
+const ANALYTICS_ADMIN_TOKEN = cleanSecret(process.env.ANALYTICS_ADMIN_TOKEN);
+const MAX_ANALYTICS_EVENTS = getNumberEnv("MAX_ANALYTICS_EVENTS", 5000);
+const CLAUDE_INPUT_COST_PER_MTOK = getNumberEnv("CLAUDE_INPUT_COST_PER_MTOK", 3);
+const CLAUDE_OUTPUT_COST_PER_MTOK = getNumberEnv("CLAUDE_OUTPUT_COST_PER_MTOK", 15);
+const CLAUDE_CACHE_WRITE_COST_PER_MTOK = getNumberEnv(
+  "CLAUDE_CACHE_WRITE_COST_PER_MTOK",
+  CLAUDE_INPUT_COST_PER_MTOK * 1.25
+);
+const CLAUDE_CACHE_READ_COST_PER_MTOK = getNumberEnv(
+  "CLAUDE_CACHE_READ_COST_PER_MTOK",
+  CLAUDE_INPUT_COST_PER_MTOK * 0.1
+);
 
 const MIME_TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -17,6 +32,49 @@ const MIME_TYPES = {
 };
 
 const ANTHROPIC_API_KEY_NAMES = ["ANTHROPIC_API_KEY", "ANTHROPIC_KEY", "CLAUDE_API_KEY"];
+const ANALYTICS_STRING_KEYS = new Set([
+  "action",
+  "angle",
+  "errorCode",
+  "eventSource",
+  "fromProfileId",
+  "model",
+  "pillar",
+  "profileId",
+  "profileLabel",
+  "provider",
+  "route",
+  "stage",
+  "status",
+  "styleMode",
+  "topicId",
+  "topicPillar",
+  "viralityMode"
+]);
+const ANALYTICS_NUMBER_KEYS = new Set([
+  "cacheCreationInputTokens",
+  "cacheReadInputTokens",
+  "currentTriggerLength",
+  "draftWordCount",
+  "finalWordCount",
+  "historyCount",
+  "inputTokens",
+  "latencyMs",
+  "outputTokens",
+  "sampleCount",
+  "sampleWordCount",
+  "totalTokens",
+  "userIdeaLength"
+]);
+const ANALYTICS_DECIMAL_KEYS = new Set([
+  "cacheTokenCostUsd",
+  "costPerPostUsd",
+  "inputTokenCostUsd",
+  "outputTokenCostUsd",
+  "totalCostUsd"
+]);
+const ANALYTICS_BOOLEAN_KEYS = new Set(["success", "usedFallback"]);
+const analyticsEvents = loadAnalyticsEvents();
 
 function sendJson(res, status, payload) {
   res.writeHead(status, {
@@ -50,6 +108,11 @@ function cleanSecret(value) {
     .trim()
     .replace(/^['"]|['"]$/g, "")
     .trim();
+}
+
+function getNumberEnv(name, fallback) {
+  const value = Number(process.env[name]);
+  return Number.isFinite(value) && value >= 0 ? value : fallback;
 }
 
 function getEnvValueCaseInsensitive(name) {
@@ -95,7 +158,7 @@ function getAnthropicEnvStatus() {
 
 function getRelevantEnvNames() {
   return Object.keys(process.env)
-    .filter((name) => /anthropic|claude|railway|port|node_env/i.test(name))
+    .filter((name) => /anthropic|claude|analytics|railway|port|node_env/i.test(name))
     .sort();
 }
 
@@ -114,6 +177,10 @@ function getConfigStatus() {
     nodeEnv: process.env.NODE_ENV || null,
     railwayEnvironment: process.env.RAILWAY_ENVIRONMENT || null,
     railwayServiceName: process.env.RAILWAY_SERVICE_NAME || null,
+    analyticsEnabled: true,
+    analyticsSummaryProtected: Boolean(ANALYTICS_ADMIN_TOKEN),
+    analyticsMaxEvents: MAX_ANALYTICS_EVENTS,
+    costConfig: getClaudeCostConfig(),
     relevantEnvNames: getRelevantEnvNames()
   };
 }
@@ -125,6 +192,415 @@ function sanitizeBlock(value, fallback = "", maxLength = 12000) {
     .replace(/\n{4,}/g, "\n\n\n")
     .trim();
   return text.length > maxLength ? `${text.slice(0, maxLength).trim()}\n[truncated]` : text;
+}
+
+function roundMoney(value) {
+  return Number(Number(value || 0).toFixed(6));
+}
+
+function getClaudeCostConfig() {
+  return {
+    currency: "USD",
+    unit: "per_million_tokens",
+    inputCostPerMillion: CLAUDE_INPUT_COST_PER_MTOK,
+    outputCostPerMillion: CLAUDE_OUTPUT_COST_PER_MTOK,
+    cacheWriteCostPerMillion: CLAUDE_CACHE_WRITE_COST_PER_MTOK,
+    cacheReadCostPerMillion: CLAUDE_CACHE_READ_COST_PER_MTOK
+  };
+}
+
+function calculateUsageCost(usage = {}) {
+  const inputTokens = Math.max(0, Math.round(Number(usage.input_tokens || 0)));
+  const outputTokens = Math.max(0, Math.round(Number(usage.output_tokens || 0)));
+  const cacheCreationInputTokens = Math.max(0, Math.round(Number(usage.cache_creation_input_tokens || 0)));
+  const cacheReadInputTokens = Math.max(0, Math.round(Number(usage.cache_read_input_tokens || 0)));
+  const inputTokenCostUsd = (inputTokens / 1_000_000) * CLAUDE_INPUT_COST_PER_MTOK;
+  const outputTokenCostUsd = (outputTokens / 1_000_000) * CLAUDE_OUTPUT_COST_PER_MTOK;
+  const cacheTokenCostUsd =
+    (cacheCreationInputTokens / 1_000_000) * CLAUDE_CACHE_WRITE_COST_PER_MTOK +
+    (cacheReadInputTokens / 1_000_000) * CLAUDE_CACHE_READ_COST_PER_MTOK;
+  const totalCostUsd = inputTokenCostUsd + outputTokenCostUsd + cacheTokenCostUsd;
+
+  return {
+    inputTokens,
+    outputTokens,
+    cacheCreationInputTokens,
+    cacheReadInputTokens,
+    totalTokens: inputTokens + outputTokens + cacheCreationInputTokens + cacheReadInputTokens,
+    inputTokenCostUsd: roundMoney(inputTokenCostUsd),
+    outputTokenCostUsd: roundMoney(outputTokenCostUsd),
+    cacheTokenCostUsd: roundMoney(cacheTokenCostUsd),
+    totalCostUsd: roundMoney(totalCostUsd)
+  };
+}
+
+function sanitizeIdentifier(value, fallback = "") {
+  return String(value || fallback)
+    .replace(/[^a-zA-Z0-9_.:-]/g, "_")
+    .slice(0, 96);
+}
+
+function sanitizeUrlReference(value) {
+  const text = sanitizeText(value);
+  if (!text) {
+    return "";
+  }
+
+  try {
+    const isAbsolute = /^[a-z][a-z0-9+.-]*:\/\//i.test(text);
+    const url = new URL(text, "http://local");
+    return (isAbsolute ? `${url.origin}${url.pathname}` : url.pathname).slice(0, 180);
+  } catch {
+    return text.split(/[?#]/)[0].slice(0, 180);
+  }
+}
+
+function sanitizeAnalyticsProperties(properties = {}) {
+  const clean = {};
+  for (const [key, value] of Object.entries(properties || {})) {
+    if (ANALYTICS_STRING_KEYS.has(key)) {
+      clean[key] = sanitizeText(value).slice(0, 160);
+    }
+
+    if (ANALYTICS_NUMBER_KEYS.has(key)) {
+      const number = Number(value);
+      if (Number.isFinite(number)) {
+        clean[key] = Math.max(0, Math.round(number));
+      }
+    }
+
+    if (ANALYTICS_DECIMAL_KEYS.has(key)) {
+      const number = Number(value);
+      if (Number.isFinite(number)) {
+        clean[key] = roundMoney(Math.max(0, number));
+      }
+    }
+
+    if (ANALYTICS_BOOLEAN_KEYS.has(key)) {
+      clean[key] = Boolean(value);
+    }
+  }
+  return clean;
+}
+
+function hashValue(value, scope = "analytics") {
+  const text = sanitizeText(value);
+  if (!text) {
+    return "";
+  }
+  return crypto
+    .createHash("sha256")
+    .update(`${ANALYTICS_SALT}:${scope}:${text}`)
+    .digest("hex")
+    .slice(0, 24);
+}
+
+function getClientIp(req) {
+  const forwardedFor = req.headers["x-forwarded-for"];
+  if (typeof forwardedFor === "string" && forwardedFor.trim()) {
+    return forwardedFor.split(",")[0].trim();
+  }
+  return req.socket?.remoteAddress || "";
+}
+
+function loadAnalyticsEvents() {
+  try {
+    if (!fs.existsSync(ANALYTICS_FILE)) {
+      return [];
+    }
+
+    const lines = fs.readFileSync(ANALYTICS_FILE, "utf8").trim().split("\n").filter(Boolean);
+    return lines
+      .slice(-MAX_ANALYTICS_EVENTS)
+      .map((line) => JSON.parse(line))
+      .filter((event) => event && event.event && event.ts);
+  } catch (error) {
+    console.warn(`Could not load analytics events: ${error.message}`);
+    return [];
+  }
+}
+
+function normalizeAnalyticsEvent(raw = {}, req) {
+  const event = sanitizeIdentifier(raw.event || raw.name, "unknown_event").toLowerCase();
+  const userAgent = req.headers["user-agent"] || "";
+  const requestHash = hashValue(`${getClientIp(req)}|${userAgent}`, new Date().toISOString().slice(0, 10));
+
+  return {
+    ts: new Date().toISOString(),
+    clientTs: sanitizeText(raw.clientTs).slice(0, 48) || null,
+    event,
+    anonymousId: sanitizeIdentifier(raw.anonymousId, "").slice(0, 96) || null,
+    sessionId: sanitizeIdentifier(raw.sessionId, "").slice(0, 96) || null,
+    requestHash,
+    page: sanitizeUrlReference(raw.page) || null,
+    referrer: sanitizeUrlReference(raw.referrer) || null,
+    properties: sanitizeAnalyticsProperties(raw.properties)
+  };
+}
+
+function recordAnalyticsEvent(raw, req) {
+  const event = normalizeAnalyticsEvent(raw, req);
+  analyticsEvents.push(event);
+  if (analyticsEvents.length > MAX_ANALYTICS_EVENTS) {
+    analyticsEvents.splice(0, analyticsEvents.length - MAX_ANALYTICS_EVENTS);
+  }
+
+  fs.mkdir(path.dirname(ANALYTICS_FILE), { recursive: true }, (mkdirError) => {
+    if (mkdirError) {
+      console.warn(`Could not create analytics directory: ${mkdirError.message}`);
+      return;
+    }
+
+    fs.appendFile(ANALYTICS_FILE, `${JSON.stringify(event)}\n`, (appendError) => {
+      if (appendError) {
+        console.warn(`Could not append analytics event: ${appendError.message}`);
+      }
+    });
+  });
+
+  return event;
+}
+
+function getCount(events, eventName, predicate = () => true) {
+  return events.filter((event) => event.event === eventName && predicate(event)).length;
+}
+
+function getTopValues(events, propertyName, limit = 8) {
+  const counts = new Map();
+  events.forEach((event) => {
+    const value = event.properties?.[propertyName];
+    if (!value) {
+      return;
+    }
+    counts.set(value, (counts.get(value) || 0) + 1);
+  });
+
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit)
+    .map(([value, count]) => ({ value, count }));
+}
+
+function averageProperty(events, propertyName) {
+  const values = events
+    .map((event) => Number(event.properties?.[propertyName]))
+    .filter((value) => Number.isFinite(value));
+  if (!values.length) {
+    return 0;
+  }
+  return Math.round(values.reduce((sum, value) => sum + value, 0) / values.length);
+}
+
+function sumProperty(events, propertyName) {
+  return events.reduce((sum, event) => {
+    const value = Number(event.properties?.[propertyName]);
+    return Number.isFinite(value) ? sum + value : sum;
+  }, 0);
+}
+
+function summarizeAiUsage(events, postEvents) {
+  const usageEvents = events.filter((event) =>
+    ["api_generate_completed", "api_workflow_completed"].includes(event.event)
+  );
+  const generationEvents = events.filter((event) => event.event === "api_generate_completed");
+  const generationCount = postEvents.length || generationEvents.length;
+  const generationCostUsd = sumProperty(generationEvents, "totalCostUsd");
+  const generationTotalTokens = sumProperty(generationEvents, "totalTokens");
+  const totalCostUsd = sumProperty(usageEvents, "totalCostUsd");
+  const totalTokens = sumProperty(usageEvents, "totalTokens");
+
+  return {
+    pricing: getClaudeCostConfig(),
+    generationInputTokens: sumProperty(generationEvents, "inputTokens"),
+    generationOutputTokens: sumProperty(generationEvents, "outputTokens"),
+    generationCacheCreationInputTokens: sumProperty(generationEvents, "cacheCreationInputTokens"),
+    generationCacheReadInputTokens: sumProperty(generationEvents, "cacheReadInputTokens"),
+    generationTotalTokens,
+    generationCostUsd: roundMoney(generationCostUsd),
+    averageTokensPerPost: generationCount ? Math.round(generationTotalTokens / generationCount) : 0,
+    averageCostPerPostUsd: roundMoney(generationCount ? generationCostUsd / generationCount : 0),
+    workflowTotalTokens: sumProperty(events.filter((event) => event.event === "api_workflow_completed"), "totalTokens"),
+    workflowCostUsd: roundMoney(sumProperty(events.filter((event) => event.event === "api_workflow_completed"), "totalCostUsd")),
+    totalTokens,
+    totalConsumptionUsd: roundMoney(totalCostUsd)
+  };
+}
+
+function rate(numerator, denominator) {
+  if (!denominator) {
+    return 0;
+  }
+  return Number(((numerator / denominator) * 100).toFixed(1));
+}
+
+function summarizeAnalyticsWindow(events) {
+  const visitors = new Set(events.map((event) => event.anonymousId || event.requestHash).filter(Boolean));
+  const sessions = new Set(events.map((event) => event.sessionId).filter(Boolean));
+  const sessionUsers = new Map();
+
+  events.forEach((event) => {
+    const user = event.anonymousId || event.requestHash;
+    if (!user || !event.sessionId) {
+      return;
+    }
+    if (!sessionUsers.has(user)) {
+      sessionUsers.set(user, new Set());
+    }
+    sessionUsers.get(user).add(event.sessionId);
+  });
+
+  const returningUsers = [...sessionUsers.values()].filter((userSessions) => userSessions.size > 1).length;
+  const appLoaded = getCount(events, "app_loaded");
+  const profileSelected = getCount(events, "profile_selected");
+  const draftRequested = getCount(events, "draft_requested");
+  const apiGenerateCompleted = getCount(events, "api_generate_completed");
+  const apiGenerateFailed = getCount(events, "api_generate_failed");
+  const clientPostEvents = events.filter((event) => event.event === "draft_generated");
+  const serverPostEvents = events.filter((event) => event.event === "api_generate_completed");
+  const postEvents = clientPostEvents.length ? clientPostEvents : serverPostEvents;
+  const draftGenerated = postEvents.length;
+  const draftFailed = getCount(events, "draft_failed") + apiGenerateFailed;
+  const critiqueCompleted = getCount(events, "workflow_completed", (event) => event.properties?.stage === "critique");
+  const rewriteCompleted = getCount(events, "workflow_completed", (event) => event.properties?.stage === "rewrite");
+  const polishCompleted = getCount(events, "workflow_completed", (event) => event.properties?.stage === "polish");
+  const copied = getCount(events, "post_copied");
+  const saved = getCount(events, "post_saved");
+  const apiGenerateEvents = events.filter((event) => event.event === "api_generate_completed");
+  const apiWorkflowEvents = events.filter((event) => event.event === "api_workflow_completed");
+  const generationAttempts = draftRequested || apiGenerateCompleted + apiGenerateFailed;
+  const generationCompletions = draftGenerated;
+  const aiUsage = summarizeAiUsage(events, postEvents);
+
+  return {
+    events: events.length,
+    uniqueVisitors: visitors.size,
+    sessions: sessions.size,
+    returningUsers,
+    returningUserRate: rate(returningUsers, visitors.size),
+    funnel: {
+      appLoaded,
+      profileSelected,
+      draftRequested,
+      draftGenerated,
+      critiqueCompleted,
+      rewriteCompleted,
+      polishCompleted,
+      copied,
+      saved
+    },
+    conversion: {
+      draftPerVisit: rate(generationCompletions, appLoaded || visitors.size),
+      polishPerDraft: rate(polishCompleted, generationCompletions),
+      copyPerDraft: rate(copied, generationCompletions),
+      savePerDraft: rate(saved, generationCompletions),
+      copyOrSavePerDraft: rate(copied + saved, generationCompletions)
+    },
+    generation: {
+      requested: generationAttempts,
+      completed: generationCompletions,
+      failed: draftFailed,
+      failureRate: rate(draftFailed, generationAttempts),
+      claude: postEvents.filter((event) => event.properties?.provider === "claude").length,
+      local: postEvents.filter((event) => event.properties?.provider !== "claude").length,
+      averageClientLatencyMs: averageProperty(events.filter((event) => event.event === "draft_generated"), "latencyMs"),
+      averageServerLatencyMs: averageProperty(apiGenerateEvents, "latencyMs")
+    },
+    posts: {
+      totalGenerated: generationCompletions,
+      byProfile: getTopValues(postEvents, "profileId", 20)
+    },
+    aiUsage,
+    workflowLatency: {
+      critiqueMs: averageProperty(apiWorkflowEvents.filter((event) => event.properties?.stage === "critique"), "latencyMs"),
+      rewriteMs: averageProperty(apiWorkflowEvents.filter((event) => event.properties?.stage === "rewrite"), "latencyMs"),
+      polishMs: averageProperty(apiWorkflowEvents.filter((event) => event.properties?.stage === "polish"), "latencyMs")
+    },
+    topProfiles: getTopValues(events, "profileId"),
+    postsByProfile: getTopValues(postEvents, "profileId", 20),
+    topTopics: getTopValues(events, "topicId"),
+    topPillars: getTopValues(events, "topicPillar"),
+    styleModes: getTopValues(events, "styleMode"),
+    viralityModes: getTopValues(events, "viralityMode")
+  };
+}
+
+function buildAnalyticsSummary() {
+  const now = Date.now();
+  const events = analyticsEvents.slice();
+  const last24h = events.filter((event) => now - Date.parse(event.ts) <= 24 * 60 * 60 * 1000);
+  const last7d = events.filter((event) => now - Date.parse(event.ts) <= 7 * 24 * 60 * 60 * 1000);
+  const last30d = events.filter((event) => now - Date.parse(event.ts) <= 30 * 24 * 60 * 60 * 1000);
+  const windows = {
+    last24h: summarizeAnalyticsWindow(last24h),
+    last7d: summarizeAnalyticsWindow(last7d),
+    last30d: summarizeAnalyticsWindow(last30d),
+    allTime: summarizeAnalyticsWindow(events)
+  };
+
+  return {
+    ok: true,
+    generatedAt: new Date().toISOString(),
+    eventStore: {
+      inMemoryEvents: analyticsEvents.length,
+      maxInMemoryEvents: MAX_ANALYTICS_EVENTS,
+      persistence: "jsonl",
+      rawContentCaptured: false
+    },
+    northStar: "completed_publishable_posts",
+    mustHaveMetrics: [
+      "dau",
+      "mau",
+      "tau",
+      "total_posts_generated",
+      "posts_generated_by_profile",
+      "tokens_consumed_per_post",
+      "dollar_value_per_post",
+      "total_token_consumption",
+      "total_dollar_consumption",
+      "copy_or_save_rate",
+      "generation_latency",
+      "failure_rate"
+    ],
+    activeUsers: {
+      dau: windows.last24h.uniqueVisitors,
+      mau: windows.last30d.uniqueVisitors,
+      tau: windows.allTime.uniqueVisitors
+    },
+    windows,
+    costConfig: getClaudeCostConfig(),
+    sourceNotes: [
+      "DAU is unique active visitors in the last 24 hours.",
+      "MAU is unique active visitors in the last 30 days.",
+      "TAU is total unique active visitors captured in the event store.",
+      "Dollar values are estimates from Anthropic usage metadata and configured per-million-token prices."
+    ]
+  };
+}
+
+function isAnalyticsSummaryAuthorized(req) {
+  if (!ANALYTICS_ADMIN_TOKEN) {
+    return true;
+  }
+
+  const url = new URL(req.url, `http://${req.headers.host}`);
+  const headerToken = cleanSecret(req.headers["x-analytics-token"]);
+  const queryToken = cleanSecret(url.searchParams.get("token"));
+  return headerToken === ANALYTICS_ADMIN_TOKEN || queryToken === ANALYTICS_ADMIN_TOKEN;
+}
+
+function payloadContext(payload = {}) {
+  return {
+    profileId: payload.profile?.id,
+    profileLabel: payload.profile?.label,
+    topicId: payload.topic?.id,
+    topicPillar: payload.topic?.pillar,
+    angle: payload.angle,
+    styleMode: payload.generationSettings?.styleMode,
+    viralityMode: payload.generationSettings?.viralityMode,
+    userIdeaLength: sanitizeText(payload.userIdea).length,
+    currentTriggerLength: sanitizeText(payload.generationSettings?.currentAffair).length,
+    sampleWordCount: sanitizeText(payload.personalStyle?.samples).split(/\s+/).filter(Boolean).length
+  };
 }
 
 function getStyleModeGuidance(styleMode) {
@@ -551,7 +1027,8 @@ async function runWorkflowStage(payload) {
     return {
       text: fallbackWorkflowText(payload),
       provider: "local",
-      model: "local-brand-engine"
+      model: "local-brand-engine",
+      usage: calculateUsageCost()
     };
   }
 
@@ -591,7 +1068,8 @@ async function runWorkflowStage(payload) {
   return {
     text,
     provider: "claude",
-    model: data.model || CLAUDE_MODEL
+    model: data.model || CLAUDE_MODEL,
+    usage: calculateUsageCost(data.usage)
   };
 }
 
@@ -601,7 +1079,8 @@ async function generatePost(payload) {
     return {
       post: fallbackPost(payload),
       provider: "local",
-      model: "local-brand-engine"
+      model: "local-brand-engine",
+      usage: calculateUsageCost()
     };
   }
 
@@ -641,7 +1120,8 @@ async function generatePost(payload) {
   return {
     post,
     provider: "claude",
-    model: data.model || CLAUDE_MODEL
+    model: data.model || CLAUDE_MODEL,
+    usage: calculateUsageCost(data.usage)
   };
 }
 
@@ -679,39 +1159,142 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (req.method === "POST" && req.url === "/api/generate") {
+  if (req.method === "GET" && req.url.startsWith("/api/analytics/summary")) {
+    if (!isAnalyticsSummaryAuthorized(req)) {
+      sendJson(res, 401, { error: "Analytics summary requires a valid token." });
+      return;
+    }
+
+    sendJson(res, 200, buildAnalyticsSummary());
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/api/analytics/event") {
     try {
       const payload = JSON.parse(await readBody(req));
-      try {
-        sendJson(res, 200, await generatePost(payload));
-      } catch (error) {
-        sendJson(res, 200, {
-          post: fallbackPost(payload),
-          provider: "local",
-          model: "local-brand-engine",
-          warning: error.message
-        });
-      }
+      recordAnalyticsEvent(payload, req);
+      sendJson(res, 200, { ok: true });
     } catch (error) {
       sendJson(res, 400, { error: error.message });
     }
     return;
   }
 
-  if (req.method === "POST" && req.url === "/api/workflow") {
+  if (req.method === "POST" && req.url === "/api/generate") {
+    const startedAt = Date.now();
     try {
       const payload = JSON.parse(await readBody(req));
       try {
-        sendJson(res, 200, await runWorkflowStage(payload));
+        const result = await generatePost(payload);
+        recordAnalyticsEvent({
+          event: "api_generate_completed",
+          properties: {
+            ...payloadContext(payload),
+            route: "/api/generate",
+            provider: result.provider,
+            model: result.model,
+            latencyMs: Date.now() - startedAt,
+            success: true,
+            ...result.usage,
+            costPerPostUsd: result.usage?.totalCostUsd || 0
+          }
+        }, req);
+        sendJson(res, 200, result);
       } catch (error) {
-        sendJson(res, 200, {
+        const fallback = {
+          post: fallbackPost(payload),
+          provider: "local",
+          model: "local-brand-engine",
+          usage: calculateUsageCost(),
+          warning: error.message
+        };
+        recordAnalyticsEvent({
+          event: "api_generate_completed",
+          properties: {
+            ...payloadContext(payload),
+            route: "/api/generate",
+            provider: fallback.provider,
+            model: fallback.model,
+            latencyMs: Date.now() - startedAt,
+            success: true,
+            ...fallback.usage,
+            costPerPostUsd: 0,
+            usedFallback: true,
+            errorCode: "claude_generate_failed"
+          }
+        }, req);
+        sendJson(res, 200, fallback);
+      }
+    } catch (error) {
+      recordAnalyticsEvent({
+        event: "api_generate_failed",
+        properties: {
+          route: "/api/generate",
+          latencyMs: Date.now() - startedAt,
+          success: false,
+          errorCode: "bad_request"
+        }
+      }, req);
+      sendJson(res, 400, { error: error.message });
+    }
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/api/workflow") {
+    const startedAt = Date.now();
+    try {
+      const payload = JSON.parse(await readBody(req));
+      try {
+        const result = await runWorkflowStage(payload);
+        recordAnalyticsEvent({
+          event: "api_workflow_completed",
+          properties: {
+            ...payloadContext(payload),
+            route: "/api/workflow",
+            stage: payload.stage,
+            provider: result.provider,
+            model: result.model,
+            latencyMs: Date.now() - startedAt,
+            success: true,
+            ...result.usage
+          }
+        }, req);
+        sendJson(res, 200, result);
+      } catch (error) {
+        const fallback = {
           text: fallbackWorkflowText(payload),
           provider: "local",
           model: "local-brand-engine",
+          usage: calculateUsageCost(),
           warning: error.message
-        });
+        };
+        recordAnalyticsEvent({
+          event: "api_workflow_completed",
+          properties: {
+            ...payloadContext(payload),
+            route: "/api/workflow",
+            stage: payload.stage,
+            provider: fallback.provider,
+            model: fallback.model,
+            latencyMs: Date.now() - startedAt,
+            success: true,
+            ...fallback.usage,
+            usedFallback: true,
+            errorCode: "claude_workflow_failed"
+          }
+        }, req);
+        sendJson(res, 200, fallback);
       }
     } catch (error) {
+      recordAnalyticsEvent({
+        event: "api_workflow_failed",
+        properties: {
+          route: "/api/workflow",
+          latencyMs: Date.now() - startedAt,
+          success: false,
+          errorCode: "bad_request"
+        }
+      }, req);
       sendJson(res, 400, { error: error.message });
     }
     return;

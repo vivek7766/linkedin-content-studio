@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LinkedIn Content Studio Analytics</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell analytics-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Observability</p>
+          <h1>Usage Analytics</h1>
+        </div>
+        <a class="secondary-button analytics-home" href="./index.html">Back to app</a>
+      </header>
+
+      <main class="analytics-dashboard">
+        <section class="tool-band">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">POC Success</p>
+              <h2>North star and funnel</h2>
+              <p class="muted" id="analyticsGeneratedAt">Loading analytics...</p>
+            </div>
+            <button class="secondary-button" id="refreshAnalyticsButton" type="button">Refresh</button>
+          </div>
+          <div class="analytics-grid" id="northStarGrid"></div>
+          <div class="funnel-list" id="funnelList"></div>
+        </section>
+
+        <section class="tool-band">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Adoption</p>
+              <h2>Profiles, topics, and modes</h2>
+            </div>
+          </div>
+          <div class="analytics-columns">
+            <div>
+              <h3>Posts by profile</h3>
+              <div id="topProfiles" class="rank-list"></div>
+            </div>
+            <div>
+              <h3>Top topics</h3>
+              <div id="topTopics" class="rank-list"></div>
+            </div>
+            <div>
+              <h3>Style modes</h3>
+              <div id="styleModes" class="rank-list"></div>
+            </div>
+            <div>
+              <h3>Virality modes</h3>
+              <div id="viralityModes" class="rank-list"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="tool-band">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Cost</p>
+              <h2>Token and dollar consumption</h2>
+            </div>
+          </div>
+          <div class="analytics-grid" id="costGrid"></div>
+        </section>
+
+        <section class="tool-band">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Reliability</p>
+              <h2>Generation health</h2>
+            </div>
+          </div>
+          <div class="analytics-grid" id="reliabilityGrid"></div>
+        </section>
+      </main>
+    </div>
+
+    <script src="./analytics.js"></script>
+  </body>
+</html>

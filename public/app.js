@@ -312,6 +312,10 @@ const DEFAULT_WORKFLOW = {
   activeStage: "idea"
 };
 
+const ANALYTICS_ENABLED = window.location.protocol.startsWith("http") && navigator.doNotTrack !== "1";
+const ANALYTICS_USER_KEY = "linkedinStudioAnalyticsUser";
+const ANALYTICS_SESSION_KEY = "linkedinStudioAnalyticsSession";
+
 const storedProfileId = loadJson("linkedinStudioSelectedProfile", DEFAULT_PROFILE_ID);
 const selectedProfileId = PROFILE_PRESETS.some((profile) => profile.id === storedProfileId)
   ? storedProfileId
@@ -397,6 +401,122 @@ function loadJson(key, fallback) {
 
 function saveJson(key, value) {
   localStorage.setItem(key, JSON.stringify(value));
+}
+
+function getOrCreateAnalyticsId(key) {
+  const existing = localStorage.getItem(key);
+  if (existing) {
+    return existing;
+  }
+
+  const id = crypto.randomUUID();
+  localStorage.setItem(key, id);
+  return id;
+}
+
+function getAnalyticsSessionId() {
+  const stored = loadJson(ANALYTICS_SESSION_KEY, null);
+  const now = Date.now();
+  if (stored?.id && stored?.expiresAt && stored.expiresAt > now) {
+    stored.expiresAt = now + 30 * 60 * 1000;
+    saveJson(ANALYTICS_SESSION_KEY, stored);
+    return stored.id;
+  }
+
+  const session = {
+    id: crypto.randomUUID(),
+    expiresAt: now + 30 * 60 * 1000
+  };
+  saveJson(ANALYTICS_SESSION_KEY, session);
+  return session.id;
+}
+
+const analyticsState = {
+  enabled: ANALYTICS_ENABLED,
+  anonymousId: ANALYTICS_ENABLED ? getOrCreateAnalyticsId(ANALYTICS_USER_KEY) : "",
+  sessionId: ANALYTICS_ENABLED ? getAnalyticsSessionId() : "",
+  startedAt: Date.now()
+};
+
+function countWords(text) {
+  const clean = String(text || "").trim();
+  return clean ? clean.split(/\s+/).length : 0;
+}
+
+function getSampleAnalytics() {
+  const sampleText = elements.styleSamples?.value || "";
+  const numberedSamples = sampleText.match(/^\s*\d+\./gm);
+  return {
+    sampleCount: numberedSamples ? numberedSamples.length : sampleText.trim() ? 1 : 0,
+    sampleWordCount: countWords(sampleText)
+  };
+}
+
+function getAnalyticsContext(extra = {}) {
+  const profile = getSelectedProfile();
+  const topic = getSelectedTopic();
+  return {
+    profileId: profile.id,
+    profileLabel: profile.label,
+    topicId: topic.id,
+    topicPillar: topic.pillar,
+    angle: state.selectedAngle,
+    styleMode: state.generationSettings.styleMode,
+    viralityMode: state.generationSettings.viralityMode,
+    userIdeaLength: elements.userIdea?.value?.trim().length || 0,
+    currentTriggerLength: elements.currentAffair?.value?.trim().length || 0,
+    historyCount: state.history.length,
+    ...getSampleAnalytics(),
+    ...extra
+  };
+}
+
+function getSafeReferrer() {
+  if (!document.referrer) {
+    return "";
+  }
+
+  try {
+    const referrer = new URL(document.referrer);
+    return `${referrer.origin}${referrer.pathname}`;
+  } catch {
+    return "";
+  }
+}
+
+function trackEvent(event, properties = {}) {
+  if (!analyticsState.enabled) {
+    return;
+  }
+
+  const payload = {
+    event,
+    anonymousId: analyticsState.anonymousId,
+    sessionId: analyticsState.sessionId,
+    clientTs: new Date().toISOString(),
+    page: window.location.pathname || "/",
+    referrer: getSafeReferrer(),
+    properties
+  };
+  const body = JSON.stringify(payload);
+
+  try {
+    if (navigator.sendBeacon) {
+      const queued = navigator.sendBeacon("/api/analytics/event", new Blob([body], { type: "application/json" }));
+      if (queued) {
+        return;
+      }
+    }
+  } catch {
+    // Fall through to fetch; analytics should never interrupt the writing flow.
+  }
+
+  fetch("/api/analytics/event", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body,
+    keepalive: true
+  }).catch(() => {});
 }
 
 function ensurePersonalStyleSamples(personalStyle, includeSeedSamples = false) {
@@ -649,7 +769,7 @@ function renderHistory() {
 
 function renderMetrics() {
   const text = getPublishableDraft();
-  const words = text ? text.split(/\s+/).length : 0;
+  const words = countWords(text);
   elements.wordCount.textContent = `${words} ${words === 1 ? "word" : "words"}`;
   elements.charCount.textContent = `${text.length} chars`;
 }
@@ -658,7 +778,7 @@ function renderSampleMetrics() {
   const sampleText = elements.styleSamples.value.trim();
   const numberedSamples = sampleText.match(/^\s*\d+\./gm);
   const samples = numberedSamples ? numberedSamples.length : sampleText ? 1 : 0;
-  const words = sampleText ? sampleText.split(/\s+/).length : 0;
+  const words = countWords(sampleText);
   elements.sampleCount.textContent = `${samples} ${samples === 1 ? "sample" : "samples"}`;
   elements.sampleWordCount.textContent = `${words} ${words === 1 ? "word" : "words"}`;
 }
@@ -762,6 +882,10 @@ function getWorkflowPayload() {
 
 async function generatePost() {
   const payload = getWorkflowPayload();
+  const startedAt = Date.now();
+  trackEvent("draft_requested", getAnalyticsContext({
+    action: "generate_post"
+  }));
   setBusy(true);
   elements.providerBadge.textContent = "Drafting";
 
@@ -784,9 +908,16 @@ async function generatePost() {
     elements.providerBadge.textContent = data.provider === "claude" ? "Claude draft" : "Local draft";
     setWorkflowStage("draft");
     renderMetrics();
+    trackEvent("draft_generated", getAnalyticsContext({
+      provider: data.provider || "unknown",
+      model: data.model || "unknown",
+      latencyMs: Date.now() - startedAt,
+      draftWordCount: countWords(data.post || ""),
+      success: true
+    }));
     showToast(data.provider === "claude" ? "Claude draft ready." : "Local draft ready.");
   } catch (error) {
-    elements.draftOutput.value = createLocalDraft(
+    const localDraft = createLocalDraft(
       payload.profile,
       payload.topic,
       state.selectedAngle,
@@ -795,12 +926,22 @@ async function generatePost() {
       state.generationSettings,
       state.workflow.userIdea
     );
+    elements.draftOutput.value = localDraft;
     elements.critiqueOutput.value = "";
     elements.rewriteOutput.value = "";
     elements.finalOutput.value = "";
     elements.providerBadge.textContent = "Local draft";
     setWorkflowStage("draft");
     renderMetrics();
+    trackEvent("draft_generated", getAnalyticsContext({
+      provider: "local_browser",
+      model: "local-brand-engine",
+      latencyMs: Date.now() - startedAt,
+      draftWordCount: countWords(localDraft),
+      success: true,
+      usedFallback: true,
+      errorCode: "client_generate_failed"
+    }));
     showToast("Local draft ready.");
   } finally {
     setBusy(false);
@@ -811,25 +952,31 @@ async function runWorkflowStage(stage) {
   const payload = getWorkflowPayload();
 
   if (stage === "critique" && !payload.draft) {
+    trackEvent("workflow_blocked", getAnalyticsContext({ stage, errorCode: "missing_draft" }));
     showToast("Generate or write a draft first.");
     return;
   }
 
   if (stage === "rewrite" && !payload.draft) {
+    trackEvent("workflow_blocked", getAnalyticsContext({ stage, errorCode: "missing_draft" }));
     showToast("Generate or write a draft first.");
     return;
   }
 
   if (stage === "rewrite" && !payload.critique) {
+    trackEvent("workflow_blocked", getAnalyticsContext({ stage, errorCode: "missing_critique" }));
     showToast("Critique the draft first.");
     return;
   }
 
   if (stage === "polish" && !payload.rewrite) {
+    trackEvent("workflow_blocked", getAnalyticsContext({ stage, errorCode: "missing_rewrite" }));
     showToast("Rewrite the draft first.");
     return;
   }
 
+  const startedAt = Date.now();
+  trackEvent("workflow_requested", getAnalyticsContext({ stage }));
   setBusy(true);
   elements.providerBadge.textContent = stage === "polish" ? "Polishing" : stage === "rewrite" ? "Rewriting" : "Critiquing";
 
@@ -848,10 +995,29 @@ async function runWorkflowStage(stage) {
     applyWorkflowResult(stage, data.text || "");
     elements.providerBadge.textContent =
       data.provider === "claude" ? `Claude ${getStageLabel(stage).toLowerCase()}` : `Local ${getStageLabel(stage).toLowerCase()}`;
+    trackEvent("workflow_completed", getAnalyticsContext({
+      stage,
+      provider: data.provider || "unknown",
+      model: data.model || "unknown",
+      latencyMs: Date.now() - startedAt,
+      finalWordCount: countWords(data.text || ""),
+      success: true
+    }));
     showToast(`${getStageLabel(stage)} ready.`);
   } catch (error) {
-    applyWorkflowResult(stage, createLocalWorkflowText(stage, payload));
+    const localText = createLocalWorkflowText(stage, payload);
+    applyWorkflowResult(stage, localText);
     elements.providerBadge.textContent = `Local ${getStageLabel(stage).toLowerCase()}`;
+    trackEvent("workflow_completed", getAnalyticsContext({
+      stage,
+      provider: "local_browser",
+      model: "local-brand-engine",
+      latencyMs: Date.now() - startedAt,
+      finalWordCount: countWords(localText),
+      success: true,
+      usedFallback: true,
+      errorCode: "client_workflow_failed"
+    }));
     showToast(`${getStageLabel(stage)} ready.`);
   } finally {
     setBusy(false);
@@ -1124,6 +1290,10 @@ function saveToTracker() {
   saveJson("linkedinStudioHistory", state.history);
   renderTopics();
   renderHistory();
+  trackEvent("post_saved", getAnalyticsContext({
+    finalWordCount: countWords(draft),
+    action: "save_to_tracker"
+  }));
   showToast("Saved to tracker.");
 }
 
@@ -1136,10 +1306,18 @@ async function copyDraft() {
 
   try {
     await navigator.clipboard.writeText(draft);
+    trackEvent("post_copied", getAnalyticsContext({
+      finalWordCount: countWords(draft),
+      action: "copy_to_clipboard"
+    }));
     showToast("Copied for LinkedIn.");
   } catch {
     elements.draftOutput.select();
     document.execCommand("copy");
+    trackEvent("post_copied", getAnalyticsContext({
+      finalWordCount: countWords(draft),
+      action: "copy_fallback"
+    }));
     showToast("Copied for LinkedIn.");
   }
 }
@@ -1162,6 +1340,7 @@ function selectProfile(profileId) {
     return;
   }
 
+  const fromProfileId = state.selectedProfileId;
   syncVoiceFromInputs();
   syncPersonalStyleFromInputs();
   state.selectedProfileId = profileId;
@@ -1174,6 +1353,10 @@ function selectProfile(profileId) {
   elements.pillarFilter.value = "All";
   clearWorkflowOutputs();
   renderAll();
+  trackEvent("profile_selected", getAnalyticsContext({
+    fromProfileId,
+    action: "profile_switch"
+  }));
   showToast(`${getSelectedProfile().label} profile loaded.`);
 }
 
@@ -1190,6 +1373,9 @@ function surpriseMe() {
   state.selectedAngle = angles[Math.floor(Math.random() * angles.length)];
   renderTopics();
   renderComposer();
+  trackEvent("surprise_clicked", getAnalyticsContext({
+    action: "surprise_topic"
+  }));
 }
 
 function setBusy(isBusy) {
@@ -1242,12 +1428,18 @@ elements.topicGrid.addEventListener("click", (event) => {
   state.selectedTopicId = card.dataset.topicId;
   renderTopics();
   renderComposer();
+  trackEvent("topic_selected", getAnalyticsContext({
+    action: "topic_card"
+  }));
 });
 
 document.querySelectorAll(".angle-button").forEach((button) => {
   button.addEventListener("click", () => {
     state.selectedAngle = button.dataset.angle;
     renderComposer();
+    trackEvent("angle_selected", getAnalyticsContext({
+      action: "angle_button"
+    }));
   });
 });
 
@@ -1256,6 +1448,9 @@ document.querySelectorAll(".mode-button").forEach((button) => {
     state.generationSettings.styleMode = button.dataset.styleMode;
     saveJson("linkedinStudioGenerationSettings", state.generationSettings);
     renderComposer();
+    trackEvent("style_mode_selected", getAnalyticsContext({
+      action: "style_mode_button"
+    }));
   });
 });
 
@@ -1273,13 +1468,42 @@ document.querySelectorAll(".mode-button").forEach((button) => {
   input.addEventListener("input", syncPersonalStyleFromInputs);
 });
 
+elements.styleSamples.addEventListener("change", () => {
+  trackEvent("tone_samples_changed", getAnalyticsContext({
+    action: "sample_text_changed"
+  }));
+});
+
 [elements.viralityMode, elements.currentAffair].forEach((input) => {
   input.addEventListener("input", syncGenerationSettingsFromInputs);
   input.addEventListener("change", syncGenerationSettingsFromInputs);
 });
 
+elements.viralityMode.addEventListener("change", () => {
+  trackEvent("virality_mode_changed", getAnalyticsContext({
+    action: "virality_select"
+  }));
+});
+
+elements.currentAffair.addEventListener("change", () => {
+  trackEvent("current_trigger_changed", getAnalyticsContext({
+    action: "current_trigger_text_changed"
+  }));
+});
+
 elements.userIdea.addEventListener("input", syncWorkflowFromInputs);
-elements.pillarFilter.addEventListener("change", renderTopics);
+elements.userIdea.addEventListener("change", () => {
+  trackEvent("user_idea_changed", getAnalyticsContext({
+    action: "user_idea_text_changed"
+  }));
+});
+elements.pillarFilter.addEventListener("change", () => {
+  renderTopics();
+  trackEvent("pillar_filter_changed", getAnalyticsContext({
+    pillar: elements.pillarFilter.value,
+    action: "pillar_filter"
+  }));
+});
 elements.surpriseButton.addEventListener("click", surpriseMe);
 elements.generateButton.addEventListener("click", generatePost);
 elements.critiqueButton.addEventListener("click", () => runWorkflowStage("critique"));
@@ -1298,6 +1522,9 @@ elements.resetVoiceButton.addEventListener("click", () => {
   state.voice = structuredClone(getSelectedProfile().voice);
   persistProfileWorkspace();
   renderVoice();
+  trackEvent("profile_voice_reset", getAnalyticsContext({
+    action: "reset_profile_voice"
+  }));
   showToast("Profile voice reset.");
 });
 elements.resetStyleButton.addEventListener("click", () => {
@@ -1307,7 +1534,22 @@ elements.resetStyleButton.addEventListener("click", () => {
   );
   persistProfileWorkspace();
   renderPersonalStyle();
+  trackEvent("tone_samples_reset", getAnalyticsContext({
+    action: "reset_tone_samples"
+  }));
   showToast("Tone samples reset.");
 });
 
 renderAll();
+trackEvent("app_loaded", getAnalyticsContext({
+  action: "initial_load"
+}));
+
+window.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") {
+    trackEvent("session_hidden", getAnalyticsContext({
+      latencyMs: Date.now() - analyticsState.startedAt,
+      action: "visibility_hidden"
+    }));
+  }
+});
