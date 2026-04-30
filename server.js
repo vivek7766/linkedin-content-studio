@@ -3,7 +3,7 @@ const fs = require("fs");
 const path = require("path");
 
 const PORT = Number(process.env.PORT || 4173);
-const HOST = process.env.HOST || "127.0.0.1";
+const HOST = process.env.HOST || "0.0.0.0";
 const ROOT = path.join(__dirname, "public");
 const CLAUDE_MODEL = process.env.CLAUDE_MODEL || "claude-sonnet-4-5";
 
