@@ -130,11 +130,15 @@ function sanitizeBlock(value, fallback = "", maxLength = 12000) {
 function getStyleModeGuidance(styleMode) {
   const guidance = {
     Balanced:
-      "Blend Brand Voice and Personal Style evenly. Keep positioning clear while preserving the author's sample-driven rhythm.",
+      "Blend Profile Voice and Tone Samples evenly. Keep positioning clear while preserving the author's sample-driven rhythm.",
+    "Profile-led":
+      "Prioritize Profile Voice: audience, point of view, credibility, and strategic positioning. Use Tone Samples lightly for cadence and structure.",
+    "Tone-led":
+      "Prioritize Tone Samples: sample rhythm, openings, tension-building, analogies, and punchy thesis lines. Keep Profile Voice as a factual constraint.",
     "Brand-led":
-      "Prioritize Brand Voice: audience, point of view, credibility, and strategic positioning. Use Personal Style lightly for cadence and structure.",
+      "Prioritize Profile Voice: audience, point of view, credibility, and strategic positioning. Use Tone Samples lightly for cadence and structure.",
     "Style-led":
-      "Prioritize Personal Style: sample rhythm, openings, tension-building, analogies, and punchy thesis lines. Keep Brand Voice as a factual constraint."
+      "Prioritize Tone Samples: sample rhythm, openings, tension-building, analogies, and punchy thesis lines. Keep Profile Voice as a factual constraint."
   };
   return guidance[styleMode] || guidance.Balanced;
 }
@@ -144,7 +148,7 @@ function getViralityGuidance(viralityMode, currentTrigger) {
     "Insight-led":
       "Optimize for durable insight, credibility, and usefulness rather than provocation.",
     "Current affairs":
-      "Anchor the post in the supplied current trigger or selected Current Affairs topic. Do not invent news. Challenge the obvious headline and extract the underlying product, AI, leadership, or operating lesson.",
+      "Anchor the post in the supplied current trigger or selected Current Affairs topic. Do not invent news. Challenge the obvious headline and extract the underlying domain, leadership, market, or operating lesson.",
     "Contrarian commentary":
       "Offer a credible contrarian read. Be provocative because the reasoning is sharper, not because the tone is louder.",
     "Anecdote-led":
@@ -161,8 +165,11 @@ function getViralityGuidance(viralityMode, currentTrigger) {
 }
 
 function buildPrompt(payload) {
-  const topic = sanitizeText(payload.topic?.title, "AI at work");
-  const pillar = sanitizeText(payload.topic?.pillar, "AI at Work");
+  const profile = payload.profile || {};
+  const profileLabel = sanitizeText(profile.label, "Professional");
+  const profileDescription = sanitizeText(profile.description, "A professional building a credible LinkedIn personal brand");
+  const topic = sanitizeText(payload.topic?.title, "professional insight");
+  const pillar = sanitizeText(payload.topic?.pillar, "Professional Insight");
   const angle = sanitizeText(payload.angle, "Teach");
   const userIdea = sanitizeBlock(payload.userIdea, "", 3500);
   const voice = payload.voice || {};
@@ -173,7 +180,7 @@ function buildPrompt(payload) {
   const currentTrigger = sanitizeBlock(generationSettings.currentAffair, "", 2500);
   const styleInstructions = sanitizeBlock(
     personalStyle.instructions,
-    "Use a reflective, strategic, senior product leader voice with concrete analogies and original insight."
+    "Use a reflective, strategic, senior professional voice with concrete analogies and original insight."
   );
   const styleSamples = sanitizeBlock(personalStyle.samples, "No sample posts provided.", 18000);
   const history = Array.isArray(payload.history) ? payload.history.slice(0, 8) : [];
@@ -186,21 +193,23 @@ function buildPrompt(payload) {
 
   return {
     system: [
-      "You write sharp, credible LinkedIn posts for a product leader building a Product x AI personal brand.",
-      "The author context: PM background, AI strategy and execution, enterprise transformation, consumer AI lens, practical leadership.",
+      "You write sharp, credible LinkedIn posts for professionals building distinctive personal brands.",
+      "Adapt the depth, examples, vocabulary, and business lens to the selected profile.",
       "Make the writing specific, grounded, and useful. Avoid generic AI hype, fake certainty, and salesy language.",
-      "Use sample posts only to infer style, rhythm, structure, and level of depth. Do not copy distinctive sentences, examples, or wording from the samples.",
+      "Use sample posts or articles only to infer style, rhythm, structure, and level of depth. Do not copy distinctive sentences, examples, or wording from the samples.",
       "Return only the post text. Do not add labels, commentary, markdown headings, or hashtags unless the user explicitly asks for them."
     ].join(" "),
     user: [
+      `Selected profile: ${profileLabel}`,
+      `Profile context: ${profileDescription}`,
       `Topic: ${topic}`,
       `Pillar: ${pillar}`,
       `Angle: ${angle}`,
       `User idea: ${userIdea || "No additional user idea supplied."}`,
-      `Audience: ${sanitizeText(voice.audience, "product, design, engineering, strategy, and AI leaders")}`,
+      `Audience: ${sanitizeText(voice.audience, "domain peers, operators, clients, and business leaders")}`,
       `Tone: ${sanitizeText(voice.tone, "authoritative but conversational, grounded in real experience")}`,
-      `Point of view: ${sanitizeText(voice.pointOfView, "AI creates advantage when product teams redesign decisions and workflows, not when they sprinkle tools on old processes")}`,
-      `Credibility signals: ${sanitizeText(voice.credentials, "PM lens, enterprise and consumer product judgment, applied AI operating experience")}`,
+      `Point of view: ${sanitizeText(voice.pointOfView, "distinctive expertise compounds when professionals turn domain judgment into clear decisions and useful stories")}`,
+      `Credibility signals: ${sanitizeText(voice.credentials, "domain experience, operating judgment, market awareness, and practical execution")}`,
       `Avoid: ${sanitizeText(voice.avoid, "jargon, breathless hype, em dashes, generic thought leadership")}`,
       `Style Mode: ${styleMode}`,
       `Style Mode guidance: ${getStyleModeGuidance(styleMode)}`,
@@ -210,13 +219,13 @@ function buildPrompt(payload) {
       "Personal writing instructions:",
       styleInstructions,
       "",
-      "Reference sample posts for tone calibration:",
+      "Reference sample posts or articles for tone calibration:",
       styleSamples,
       "",
       "Style calibration notes:",
-      "- Preserve the author's strategic, reflective, system-level reasoning.",
-      "- Prefer concrete analogies, named tensions, India/global context when relevant, and crisp thesis lines.",
-      "- For viral/current affairs posts, use a timely trigger to reveal a deeper system truth, not as shallow trend-chasing.",
+      "- Preserve the author's strategic, reflective, system-level reasoning while fitting the selected profile.",
+      "- Prefer concrete analogies, named tensions, domain context, and crisp thesis lines.",
+      "- For viral/current affairs posts, use a timely trigger to reveal a deeper domain truth, not as shallow trend-chasing.",
       "- Let paragraphs breathe with LinkedIn-friendly line breaks.",
       "- Create a new original post. Do not reuse the sample analogies unless the selected topic directly calls for them.",
       "",
@@ -235,10 +244,12 @@ function buildPrompt(payload) {
 }
 
 function fallbackPost(payload) {
+  const profile = payload.profile || {};
+  const profileLabel = sanitizeText(profile.label, "professional");
   const topic = payload.topic || {};
-  const title = sanitizeText(topic.title, "How AI changes product work");
+  const title = sanitizeText(topic.title, "How this shift changes work");
   const topicPhrase = title ? title.charAt(0).toLowerCase() + title.slice(1) : title;
-  const pillar = sanitizeText(topic.pillar, "AI at Work");
+  const pillar = sanitizeText(topic.pillar, "Professional Insight");
   const angle = sanitizeText(payload.angle, "Teach");
   const userIdea = sanitizeText(payload.userIdea);
   const voice = payload.voice || {};
@@ -252,10 +263,10 @@ function fallbackPost(payload) {
   const ideaLine = userIdea
     ? `The starting point is simple: ${userIdea}`
     : `The useful conversation starts with ${topicPhrase}.`;
-  const audience = sanitizeText(voice.audience, "product and AI leaders");
+  const audience = sanitizeText(voice.audience, "domain peers and business leaders");
   const pointOfView = sanitizeText(
     voice.pointOfView,
-    "AI creates advantage when teams redesign decisions and workflows, not when they simply add another tool"
+    "distinctive expertise compounds when professionals turn domain judgment into clear decisions and useful stories"
   );
 
   const hooks = {
@@ -265,7 +276,7 @@ function fallbackPost(payload) {
       hasStyleSamples
         ? `The visible story is ${topicPhrase}. The real story is the system around it.`
         : `The useful lesson in ${topicPhrase} is less about tools and more about operating design.`,
-      `A simple test for ${pillar.toLowerCase()}: does it change the decision, or just decorate the workflow?`
+      `A simple test for ${pillar.toLowerCase()}: does it improve the decision, or just decorate the workflow?`
     ],
     Challenge: [
       `The comfortable take on ${topicPhrase} misses the point.`,
@@ -276,14 +287,14 @@ function fallbackPost(payload) {
       `A lot of ${pillar.toLowerCase()} work sounds strategic until you inspect the operating model.`
     ],
     "Personal story": [
-      `A pattern I keep seeing in product work: ${topicPhrase} only becomes real when the team changes its habits.`,
-      `The first time ${topicPhrase} clicked for me, it was not because the model got better.`,
-      `One lesson I have learned from building around AI: the product decision matters more than the demo.`
+      `A pattern I keep seeing in serious work: ${topicPhrase} only becomes real when the team changes its habits.`,
+      `The first time ${topicPhrase} clicked for me, it was not because the tool got better.`,
+      `One lesson I keep relearning: the decision matters more than the demo.`
     ],
     "Hot take": [
       `Hot take: ${topicPhrase} will reward disciplined operators more than flashy experimenters.`,
       `The biggest unlock in ${topicPhrase} is not speed. It is judgment at scale.`,
-      `I suspect the winners in ${pillar.toLowerCase()} will look less like AI labs and more like disciplined product teams.`
+      `I suspect the winners in ${pillar.toLowerCase()} will look less like commentators and more like disciplined operators.`
     ]
   };
 
@@ -291,7 +302,7 @@ function fallbackPost(payload) {
     hooks[angle] = [
       currentTrigger
         ? `The headline is about ${triggerPhrase}. The real story is what it reveals underneath.`
-        : "The easiest take on this week's AI narrative is probably the least useful one.",
+        : "The easiest take on this week's narrative is probably the least useful one.",
       "A current headline is useful only if it helps us see the system behind the noise.",
       "The news cycle moves fast. Operating reality moves slower. That gap is where the lesson sits."
     ];
@@ -301,14 +312,14 @@ function fallbackPost(payload) {
     hooks[angle] = [
       `The popular take on ${topicPhrase} is too neat.`,
       `I think the obvious lesson from ${topicPhrase} is the wrong one.`,
-      "We may be overestimating the technology shift and underestimating the operating shift."
+      "We may be overestimating the headline shift and underestimating the operating shift."
     ];
   }
 
   if (viralityMode === "Anecdote-led") {
     hooks[angle] = [
       `A small moment changed how I think about ${topicPhrase}.`,
-      "This sounds like a technology story. It is really a human behavior story.",
+      "This sounds like a tools story. It is really a human behavior story.",
       "I keep coming back to one pattern: people do not adopt systems. They adopt relief from friction."
     ];
   }
@@ -316,7 +327,7 @@ function fallbackPost(payload) {
   if (viralityMode === "Debate spark") {
     hooks[angle] = [
       `What if the way we talk about ${topicPhrase} is making teams less prepared?`,
-      "There are two kinds of leaders in the AI shift. Only one is building for what comes next.",
+      "There are two kinds of leaders in any major shift. Only one is building for what comes next.",
       "A question worth debating: are we automating work, or just moving the bottleneck somewhere else?"
     ];
   }
@@ -326,17 +337,19 @@ function fallbackPost(payload) {
 
   const middleByAngle = {
     Teach:
-      "A strong AI workflow has three parts: a clear human decision, a model-assisted input, and a feedback loop that makes the next decision better. If any one of those is missing, the team usually gets a polished shortcut instead of a real capability.",
+      `A strong ${profileLabel.toLowerCase()} post has three parts: a real decision, a concrete example, and a lesson that helps the audience see their own work differently. If any one of those is missing, the post usually becomes a polished opinion instead of a useful signal.`,
     Challenge:
-      "The trap is treating AI as a layer you add after the product strategy is set. The better move is to ask where judgment, context, and repetition already live in the customer or employee journey, then redesign that moment around a better decision.",
+      "The trap is treating a new capability as a layer you add after the strategy is set. The better move is to ask where judgment, context, and repetition already live in the journey, then redesign that moment around a better decision.",
     "Personal story":
-      "In practice, the useful breakthroughs tend to be quiet. A support team routes issues with better context. A PM sees risk earlier. A customer gets a next step that feels obvious instead of automated. None of this looks dramatic in a demo, but it compounds.",
+      "In practice, the useful breakthroughs tend to be quiet. A team notices the hidden constraint earlier. A leader makes a sharper trade-off. A customer or stakeholder gets a next step that feels obvious instead of abstract. None of this looks dramatic in a demo, but it compounds.",
     "Hot take":
-      "The teams that win will not be the ones with the longest list of pilots. They will be the ones who can turn one high-value workflow into a repeatable operating advantage, then keep improving it with real usage data."
+      `The ${profileLabel.toLowerCase()} voices that stand out will not be the ones with the broadest takes. They will be the ones who can turn one high-value pattern into a repeatable insight, then keep sharpening it with real evidence.`
   };
 
   const styleModeLine = {
     Balanced: `For ${audience}, the implication is pretty direct: ${pointOfView}.`,
+    "Profile-led": `For ${audience}, the strategic implication is direct: ${pointOfView}.`,
+    "Tone-led": `But here is the part I keep returning to: ${pointOfView}.`,
     "Brand-led": `For ${audience}, the strategic implication is direct: ${pointOfView}.`,
     "Style-led": `But here is the part I keep returning to: ${pointOfView}.`
   };
@@ -344,7 +357,7 @@ function fallbackPost(payload) {
   const viralityBridge = {
     "Insight-led": hasStyleSamples
       ? "It is not enough to make one part of the machine faster. The surrounding constraints, incentives, handoffs, and judgment loops have to change with it."
-      : "That changes the product brief. Instead of asking \"where can we use AI?\", the sharper question is: \"which decision would become meaningfully better if the system had more context, memory, and iteration?\"",
+      : "That changes the brief. Instead of asking \"where can we use this?\", the sharper question is: \"which decision would become meaningfully better if the system had more context, memory, and iteration?\"",
     "Current affairs": currentTrigger
       ? "The point is not to react to the headline. The point is to ask what the headline exposes about incentives, power, adoption, and timing."
       : "The point is not to chase the news cycle. The point is to use it as a diagnostic for what is changing underneath.",
@@ -369,14 +382,17 @@ function fallbackPost(payload) {
     "",
     viralityMode === "Debate spark"
       ? "Which side of this debate are you on?"
-      : "Where are you seeing AI actually change the way work gets done, not just the interface around it?"
+      : "Where are you seeing this actually change the way work gets done, not just the language around it?"
   ].join("\n");
 }
 
 function buildWorkflowPrompt(payload) {
   const stage = sanitizeText(payload.stage, "critique");
-  const topic = sanitizeText(payload.topic?.title, "AI at work");
-  const pillar = sanitizeText(payload.topic?.pillar, "AI at Work");
+  const profile = payload.profile || {};
+  const profileLabel = sanitizeText(profile.label, "Professional");
+  const profileDescription = sanitizeText(profile.description, "A professional building a credible LinkedIn personal brand");
+  const topic = sanitizeText(payload.topic?.title, "professional insight");
+  const pillar = sanitizeText(payload.topic?.pillar, "Professional Insight");
   const angle = sanitizeText(payload.angle, "Teach");
   const userIdea = sanitizeBlock(payload.userIdea, "", 3500);
   const draft = sanitizeBlock(payload.draft, "", 9000);
@@ -390,7 +406,7 @@ function buildWorkflowPrompt(payload) {
   const currentTrigger = sanitizeBlock(generationSettings.currentAffair, "", 2500);
   const styleInstructions = sanitizeBlock(
     personalStyle.instructions,
-    "Use a reflective, strategic, senior product leader voice with concrete analogies and original insight."
+    "Use a reflective, strategic, senior professional voice with concrete analogies and original insight."
   );
   const styleSamples = sanitizeBlock(personalStyle.samples, "No sample posts provided.", 12000);
 
@@ -415,13 +431,16 @@ function buildWorkflowPrompt(payload) {
 
   return {
     system: [
-      "You are an expert LinkedIn editor for a Product x AI personal brand.",
-      "Use sample posts only to infer style, rhythm, structure, and level of depth. Do not copy distinctive sentences, examples, or wording from the samples.",
+      "You are an expert LinkedIn editor for professionals building distinctive personal brands.",
+      "Adapt edits to the selected profile's domain, audience, credibility signals, and business lens.",
+      "Use sample posts or articles only to infer style, rhythm, structure, and level of depth. Do not copy distinctive sentences, examples, or wording from the samples.",
       "Keep the author's voice original, strategic, grounded, and senior."
     ].join(" "),
     user: [
       `Workflow stage: ${stage}`,
       `Stage instruction: ${stageInstructions[stage] || stageInstructions.critique}`,
+      `Selected profile: ${profileLabel}`,
+      `Profile context: ${profileDescription}`,
       `Topic: ${topic}`,
       `Pillar: ${pillar}`,
       `Angle: ${angle}`,
@@ -429,16 +448,16 @@ function buildWorkflowPrompt(payload) {
       `Style Mode: ${styleMode}`,
       `Virality Lens: ${viralityMode}`,
       `Current trigger: ${currentTrigger || "None supplied."}`,
-      `Audience: ${sanitizeText(voice.audience, "product, design, engineering, strategy, and AI leaders")}`,
+      `Audience: ${sanitizeText(voice.audience, "domain peers, operators, clients, and business leaders")}`,
       `Tone: ${sanitizeText(voice.tone, "authoritative but conversational, grounded in real experience")}`,
-      `Point of view: ${sanitizeText(voice.pointOfView, "AI creates advantage when product teams redesign decisions and workflows, not when they sprinkle tools on old processes")}`,
-      `Credibility signals: ${sanitizeText(voice.credentials, "PM lens, enterprise and consumer product judgment, applied AI operating experience")}`,
+      `Point of view: ${sanitizeText(voice.pointOfView, "distinctive expertise compounds when professionals turn domain judgment into clear decisions and useful stories")}`,
+      `Credibility signals: ${sanitizeText(voice.credentials, "domain experience, operating judgment, market awareness, and practical execution")}`,
       `Avoid: ${sanitizeText(voice.avoid, "jargon, breathless hype, em dashes, generic thought leadership")}`,
       "",
       "Personal writing instructions:",
       styleInstructions,
       "",
-      "Reference sample posts for tone calibration:",
+      "Reference sample posts or articles for tone calibration:",
       styleSamples,
       "",
       "Current draft:",
@@ -483,17 +502,18 @@ function fallbackCritique(payload) {
     "Originality: Name the hidden bottleneck, trade-off, or human behavior underneath the topic.",
     `Engagement: ${hasQuestion ? "The closing question is present; make it more debatable." : "Add a closing question that invites a point of view."}`,
     `Length: ${words} words. Aim for 130-220 words unless the story needs more room.`,
-    "Rewrite direction: Lead with the strongest tension, add one concrete example or analogy, then land the product/leadership implication."
+    "Rewrite direction: Lead with the strongest tension, add one concrete example or analogy, then land the leadership or domain implication."
   ].join("\n");
 }
 
 function fallbackRewrite(payload) {
-  const idea = sanitizeText(payload.userIdea, payload.topic?.title || "this AI shift");
+  const profileLabel = sanitizeText(payload.profile?.label, "professional");
+  const idea = sanitizeText(payload.userIdea, payload.topic?.title || "this shift");
   const voice = payload.voice || {};
-  const audience = sanitizeText(voice.audience, "product and AI leaders");
+  const audience = sanitizeText(voice.audience, "domain peers and business leaders");
   const pointOfView = sanitizeText(
     voice.pointOfView,
-    "AI creates advantage when teams redesign decisions and workflows, not when they simply add another tool"
+    "distinctive expertise compounds when professionals turn domain judgment into clear decisions and useful stories"
   );
 
   return [
@@ -501,17 +521,17 @@ function fallbackRewrite(payload) {
     "",
     "The deeper story is usually less convenient.",
     "",
-    "Most teams look at AI through the lens of capability: what can the model do, how fast can it do it, and where can we plug it into the workflow?",
+    "Most teams look at change through the lens of capability: what can the tool do, how fast can it do it, and where can we plug it into the workflow?",
     "",
     "But capability is rarely the real bottleneck.",
     "",
-    "The harder question is whether the surrounding system is ready for the change: incentives, handoffs, governance, trust, and the human judgment that still has to sit between the model and the outcome.",
+    "The harder question is whether the surrounding system is ready for the change: incentives, handoffs, governance, trust, and the human judgment that still has to sit between the tool and the outcome.",
     "",
     `For ${audience}, the implication is direct: ${pointOfView}.`,
     "",
-    "Do not just ask what AI can automate. Ask what decision, behavior, or operating rhythm needs to be redesigned because AI is now part of the system.",
+    `For a ${profileLabel.toLowerCase()}, the stronger question is not just what changed. It is which decision, behavior, or operating rhythm now needs to be redesigned.`,
     "",
-    "Where do you think teams are still confusing AI capability with AI readiness?"
+    "Where do you think teams are still confusing new capability with real readiness?"
   ].join("\n");
 }
 
