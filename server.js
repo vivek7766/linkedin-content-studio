@@ -15,6 +15,8 @@ const MIME_TYPES = {
   ".svg": "image/svg+xml"
 };
 
+const ANTHROPIC_API_KEY_NAMES = ["ANTHROPIC_API_KEY", "ANTHROPIC_KEY", "CLAUDE_API_KEY"];
+
 function sendJson(res, status, payload) {
   res.writeHead(status, {
     "content-type": "application/json; charset=utf-8",
@@ -40,6 +42,41 @@ function readBody(req) {
 
 function sanitizeText(value, fallback = "") {
   return String(value || fallback).replace(/\s+/g, " ").trim();
+}
+
+function cleanSecret(value) {
+  return String(value || "")
+    .trim()
+    .replace(/^['"]|['"]$/g, "")
+    .trim();
+}
+
+function getEnvValueCaseInsensitive(name) {
+  if (Object.prototype.hasOwnProperty.call(process.env, name)) {
+    return process.env[name];
+  }
+
+  const normalizedName = name.toLowerCase();
+  const actualName = Object.keys(process.env).find((key) => key.toLowerCase() === normalizedName);
+  return actualName ? process.env[actualName] : "";
+}
+
+function getAnthropicApiKey() {
+  for (const name of ANTHROPIC_API_KEY_NAMES) {
+    const value = cleanSecret(getEnvValueCaseInsensitive(name));
+    if (value) {
+      return { name, value };
+    }
+  }
+
+  return { name: "", value: "" };
+}
+
+function getAnthropicEnvStatus() {
+  return ANTHROPIC_API_KEY_NAMES.map((name) => {
+    const value = cleanSecret(getEnvValueCaseInsensitive(name));
+    return `${name}:${value ? "present" : "missing"}`;
+  }).join(", ");
 }
 
 function sanitizeBlock(value, fallback = "", maxLength = 12000) {
@@ -289,8 +326,8 @@ function fallbackPost(payload) {
 }
 
 async function generatePost(payload) {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
+  const apiKey = getAnthropicApiKey();
+  if (!apiKey.value) {
     return {
       post: fallbackPost(payload),
       provider: "local",
@@ -303,7 +340,7 @@ async function generatePost(payload) {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      "x-api-key": apiKey,
+      "x-api-key": apiKey.value,
       "anthropic-version": "2023-06-01"
     },
     body: JSON.stringify({
@@ -397,7 +434,11 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, HOST, () => {
   console.log(`LinkedIn Content Studio running at http://${HOST}:${PORT}`);
-  if (!process.env.ANTHROPIC_API_KEY) {
-    console.log("ANTHROPIC_API_KEY is not set; using local draft generation.");
+  const apiKey = getAnthropicApiKey();
+  console.log(`Anthropic env status: ${getAnthropicEnvStatus()}`);
+  if (apiKey.value) {
+    console.log(`Claude generation enabled via ${apiKey.name}.`);
+  } else {
+    console.log("No Anthropic API key detected; using local draft generation.");
   }
 });
