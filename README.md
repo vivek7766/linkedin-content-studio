@@ -10,7 +10,7 @@ A responsive LinkedIn content studio for generating profile-specific thought lea
 - **Brand Voice** — configure tone, audience, point of view, credibility signals, and words to avoid
 - **Personal Style** — paste your own sample posts so the model learns your rhythm and structure
 - **Guided workflow** — move through User idea → Generate draft → Critique draft → Rewrite draft → Final polish
-- **Quality prompt pack** — server prompts enforce stronger hooks, lived specificity, one clear insight, stricter critique scoring, and final polish rules
+- **Quality prompt skill** — every server-side draft, critique, rewrite, and polish request loads `LINKEDIN_POST_PROMPTS.md` as the reusable prompt-skill source of truth
 - **Post Tracker** — saves generated posts locally to avoid repeating topics
 - **Usage analytics** — tracks DAU, MAU, TAU, posts generated, profile mix, token usage, and estimated generation cost
 - **PWA shell** — installable app manifest, service worker, responsive layout, and offline fallback
@@ -53,6 +53,10 @@ node server.js
 4. Choose an angle, style mode, and virality lens, then click **Generate post**.
 5. Use the guided workflow to critique, rewrite, and polish the draft.
 6. Edit the final post, then **Copy** or **Save to tracker**.
+
+## Prompt skill
+
+The generation engine reads `LINKEDIN_POST_PROMPTS.md` during every server-side generation and workflow request. Update that Markdown file to change the shared prompt rules used for drafts, critiques, rewrites, and final polish.
 
 ## Project structure
 

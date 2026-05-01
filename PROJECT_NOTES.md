@@ -187,6 +187,14 @@ The generator combines:
 Selected Profile + Topic + Angle + Profile Voice + Tone Samples + Style Mode + Virality Lens + Current trigger + Post History
 ```
 
+Every server-side generation and workflow request also loads:
+
+```text
+LINKEDIN_POST_PROMPTS.md
+```
+
+Treat this file as the shared prompt skill for draft generation, critique, rewrite, and final polish behavior. Editing it changes future server-side prompt calls without requiring changes in `server.js`.
+
 Profile Voice handles strategic positioning for the selected user type. Tone Samples handle writing fingerprint and rhythm. Style Mode controls which one gets more weight.
 
 The workflow path is:

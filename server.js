@@ -12,6 +12,9 @@ const ANALYTICS_FILE = process.env.ANALYTICS_FILE || path.join(__dirname, "data"
 const ANALYTICS_SALT = process.env.ANALYTICS_SALT || "linkedin-content-studio-analytics";
 const ANALYTICS_ADMIN_TOKEN = cleanSecret(process.env.ANALYTICS_ADMIN_TOKEN);
 const MAX_ANALYTICS_EVENTS = getNumberEnv("MAX_ANALYTICS_EVENTS", 5000);
+const LINKEDIN_PROMPT_SKILL_FILE = "LINKEDIN_POST_PROMPTS.md";
+const LINKEDIN_PROMPT_SKILL_PATH = path.join(__dirname, LINKEDIN_PROMPT_SKILL_FILE);
+const LINKEDIN_PROMPT_SKILL_MAX_LENGTH = 18000;
 const CLAUDE_INPUT_COST_PER_MTOK = getNumberEnv("CLAUDE_INPUT_COST_PER_MTOK", 3);
 const CLAUDE_OUTPUT_COST_PER_MTOK = getNumberEnv("CLAUDE_OUTPUT_COST_PER_MTOK", 15);
 const CLAUDE_CACHE_WRITE_COST_PER_MTOK = getNumberEnv(
@@ -191,6 +194,28 @@ function getAnthropicEnvStatus() {
   }).join(", ");
 }
 
+function getLinkedInPromptSkill() {
+  try {
+    return sanitizeBlock(
+      fs.readFileSync(LINKEDIN_PROMPT_SKILL_PATH, "utf8"),
+      "",
+      LINKEDIN_PROMPT_SKILL_MAX_LENGTH
+    );
+  } catch (error) {
+    return "";
+  }
+}
+
+function getLinkedInPromptSkillStatus() {
+  const content = getLinkedInPromptSkill();
+  return {
+    file: LINKEDIN_PROMPT_SKILL_FILE,
+    loaded: Boolean(content),
+    characterCount: content.length,
+    maxCharacters: LINKEDIN_PROMPT_SKILL_MAX_LENGTH
+  };
+}
+
 function getRelevantEnvNames() {
   return Object.keys(process.env)
     .filter((name) => /anthropic|claude|analytics|railway|port|node_env/i.test(name))
@@ -215,6 +240,7 @@ function getConfigStatus() {
     analyticsEnabled: true,
     analyticsSummaryProtected: Boolean(ANALYTICS_ADMIN_TOKEN),
     analyticsMaxEvents: MAX_ANALYTICS_EVENTS,
+    linkedInPromptSkill: getLinkedInPromptSkillStatus(),
     costConfig: getClaudeCostConfig(),
     relevantEnvNames: getRelevantEnvNames()
   };
@@ -705,6 +731,7 @@ function formatForbiddenPhrases() {
 }
 
 function buildPrompt(payload) {
+  const linkedInPromptSkill = payload.linkedInPromptSkill || getLinkedInPromptSkill();
   const profile = payload.profile || {};
   const profileLabel = sanitizeText(profile.label, "Professional");
   const profileDescription = sanitizeText(profile.description, "A professional building a credible LinkedIn personal brand");
@@ -734,6 +761,7 @@ function buildPrompt(payload) {
   return {
     system: [
       "You are an expert LinkedIn ghostwriter for founders, operators, engineers, and professionals building distinctive personal brands.",
+      `Always apply the prompt skill loaded from ${LINKEDIN_PROMPT_SKILL_FILE}; it is the source of truth for post quality, critique, rewrite, and polish behavior.`,
       "Adapt the depth, examples, vocabulary, and business lens to the selected profile.",
       "Make the writing specific, grounded, useful, and human. The post should feel like it came from a thoughtful person with real judgment.",
       "Use sample posts or articles only to infer style, rhythm, structure, and level of depth. Do not copy distinctive sentences, examples, or wording from the samples.",
@@ -755,6 +783,9 @@ function buildPrompt(payload) {
       `Style Mode guidance: ${getStyleModeGuidance(styleMode)}`,
       `Virality Lens: ${viralityMode}`,
       `Virality guidance: ${getViralityGuidance(viralityMode, currentTrigger)}`,
+      "",
+      `${LINKEDIN_PROMPT_SKILL_FILE} skill instructions:`,
+      linkedInPromptSkill || "Prompt skill file could not be loaded. Fall back to the quality bar below.",
       "",
       "Personal writing instructions:",
       styleInstructions,
@@ -933,6 +964,7 @@ function fallbackPost(payload) {
 }
 
 function buildWorkflowPrompt(payload) {
+  const linkedInPromptSkill = payload.linkedInPromptSkill || getLinkedInPromptSkill();
   const stage = sanitizeText(payload.stage, "critique");
   const profile = payload.profile || {};
   const profileLabel = sanitizeText(profile.label, "Professional");
@@ -981,6 +1013,7 @@ function buildWorkflowPrompt(payload) {
   return {
     system: [
       "You are an expert LinkedIn editor for professionals building distinctive personal brands.",
+      `Always apply the prompt skill loaded from ${LINKEDIN_PROMPT_SKILL_FILE}; it is the source of truth for post quality, critique, rewrite, and polish behavior.`,
       "Adapt edits to the selected profile's domain, audience, credibility signals, and business lens.",
       "Use sample posts or articles only to infer style, rhythm, structure, and level of depth. Do not copy distinctive sentences, examples, or wording from the samples.",
       "Keep the author's voice original, strategic, grounded, and senior."
@@ -1002,6 +1035,9 @@ function buildWorkflowPrompt(payload) {
       `Point of view: ${sanitizeText(voice.pointOfView, "distinctive expertise compounds when professionals turn domain judgment into clear decisions and useful stories")}`,
       `Credibility signals: ${sanitizeText(voice.credentials, "domain experience, operating judgment, market awareness, and practical execution")}`,
       `Avoid: ${sanitizeText(voice.avoid, "jargon, breathless hype, em dashes, generic thought leadership")}`,
+      "",
+      `${LINKEDIN_PROMPT_SKILL_FILE} skill instructions:`,
+      linkedInPromptSkill || "Prompt skill file could not be loaded. Fall back to the quality bar below.",
       "",
       "Personal writing instructions:",
       styleInstructions,
@@ -1104,17 +1140,19 @@ function fallbackPolish(payload) {
 }
 
 async function runWorkflowStage(payload) {
+  const linkedInPromptSkill = getLinkedInPromptSkill();
+  const promptPayload = { ...payload, linkedInPromptSkill };
   const apiKey = getAnthropicApiKey();
   if (!apiKey.value) {
     return {
-      text: fallbackWorkflowText(payload),
+      text: fallbackWorkflowText(promptPayload),
       provider: "local",
       model: "local-brand-engine",
       usage: calculateUsageCost()
     };
   }
 
-  const prompt = buildWorkflowPrompt(payload);
+  const prompt = buildWorkflowPrompt(promptPayload);
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -1156,17 +1194,19 @@ async function runWorkflowStage(payload) {
 }
 
 async function generatePost(payload) {
+  const linkedInPromptSkill = getLinkedInPromptSkill();
+  const promptPayload = { ...payload, linkedInPromptSkill };
   const apiKey = getAnthropicApiKey();
   if (!apiKey.value) {
     return {
-      post: fallbackPost(payload),
+      post: fallbackPost(promptPayload),
       provider: "local",
       model: "local-brand-engine",
       usage: calculateUsageCost()
     };
   }
 
-  const prompt = buildPrompt(payload);
+  const prompt = buildPrompt(promptPayload);
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
