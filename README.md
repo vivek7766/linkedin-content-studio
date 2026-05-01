@@ -1,15 +1,19 @@
 # LinkedIn Content Studio
 
-A local web app for generating LinkedIn posts tailored to a Product × AI personal brand. Built with plain Node.js — no framework, no build step.
+A responsive LinkedIn content studio for generating profile-specific thought leadership posts. It supports Product x AI leaders, founders, consultants, analysts, GenAI engineers, UI/UX designers, technical architects, supply chain leaders, and enterprise leaders.
 
 ## Features
 
-- **Topic Generator** — curated topic grid organized by content pillars (AI at Work, Product Strategy, Leadership, etc.)
+- **Profile-first generation** — choose the audience profile before drafting so the strategy, examples, and vocabulary fit the writer.
+- **Topic Generator** — curated topic grid organized by content pillars including AI at Work, Product Strategy, Design and Experience, Architecture and Platforms, Supply Chain, Consulting, and Leadership.
 - **Post Composer** — choose angle (Teach / Challenge / Personal story / Hot take), Style Mode (Balanced / Brand-led / Style-led), and Virality Lens (Insight-led / Current affairs / Contrarian / Anecdote-led / Debate spark)
 - **Brand Voice** — configure tone, audience, point of view, credibility signals, and words to avoid
 - **Personal Style** — paste your own sample posts so the model learns your rhythm and structure
+- **Guided workflow** — move through User idea → Generate draft → Critique draft → Rewrite draft → Final polish
+- **Quality prompt pack** — server prompts enforce stronger hooks, lived specificity, one clear insight, stricter critique scoring, and final polish rules
 - **Post Tracker** — saves generated posts locally to avoid repeating topics
-- **Offline fallback** — works without an API key using a local brand-voice engine
+- **Usage analytics** — tracks DAU, MAU, TAU, posts generated, profile mix, token usage, and estimated generation cost
+- **PWA shell** — installable app manifest, service worker, responsive layout, and offline fallback
 
 ## Requirements
 
@@ -39,6 +43,7 @@ node server.js
 | `CLAUDE_MODEL` | `claude-sonnet-4-5` | Claude model ID to use for generation. |
 | `PORT` | `4173` | Port the server listens on. |
 | `HOST` | `127.0.0.1` | Host the server binds to. |
+| `ANALYTICS_ADMIN_TOKEN` | _(unset)_ | Optional token to protect `/analytics.html` in production. |
 
 ## Usage
 
@@ -46,17 +51,30 @@ node server.js
 2. Fill in **Brand Voice** and **Personal Style** in the left sidebar (saved automatically in localStorage).
 3. Click a topic card or hit **Surprise me** to pick a topic.
 4. Choose an angle, style mode, and virality lens, then click **Generate post**.
-5. Edit the draft in the text area, then **Copy** or **Save to tracker**.
+5. Use the guided workflow to critique, rewrite, and polish the draft.
+6. Edit the final post, then **Copy** or **Save to tracker**.
 
 ## Project structure
 
 ```
 linkedin-content-studio/
-├── server.js          # HTTP server + Claude API integration
+├── server.js          # HTTP server, Claude API integration, analytics endpoints
+├── LINKEDIN_POST_PROMPTS.md
+├── ARCHITECTURE_REVIEW_AND_SCALE_PLAN.md
+├── ROADMAP_TO_1M_USERS.md
 ├── package.json
+├── docs/
+│   └── architecture/
+│       ├── LinkedIn_Content_Studio_Technical_Architecture.pptx
+│       └── architecture-preview-*.png
 └── public/
     ├── index.html
+    ├── analytics.html
+    ├── analytics.js
     ├── app.js         # All client-side logic
+    ├── manifest.webmanifest
+    ├── offline.html
+    ├── sw.js
     └── styles.css
 ```
 

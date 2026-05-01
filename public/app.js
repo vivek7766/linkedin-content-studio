@@ -133,14 +133,56 @@ const TOPICS = [
     pillar: "Engineering and AI Systems",
     title: "GenAI reliability is an evaluation problem before it is a model problem",
     prompt: "Write about evals, failure modes, retrieval quality, guardrails, and production readiness.",
-    profiles: ["genai-engineer"]
+    profiles: ["genai-engineer", "technical-architect"]
   },
   {
     id: "agentic-systems-recovery",
     pillar: "Engineering and AI Systems",
     title: "Judge AI agents by recovery, not demos",
     prompt: "Explain why production agents need observability, fallback paths, memory boundaries, and human review.",
-    profiles: ["genai-engineer", "product-ai"]
+    profiles: ["genai-engineer", "product-ai", "technical-architect"]
+  },
+  {
+    id: "ai-ux-trust",
+    pillar: "Design and Experience",
+    title: "AI UX earns trust before it earns delight",
+    prompt: "Connect confidence, control, recovery, and transparency to product experience quality.",
+    profiles: ["ui-ux-designer", "product-ai", "entrepreneur"]
+  },
+  {
+    id: "invisible-ai-ux",
+    pillar: "Design and Experience",
+    title: "The invisible UX of AI is recovery",
+    prompt: "Show why graceful failure, human override, and context repair matter more than magical first-run demos.",
+    profiles: ["ui-ux-designer", "genai-engineer", "product-ai"]
+  },
+  {
+    id: "design-systems-behavior",
+    pillar: "Design and Experience",
+    title: "Design systems need behavior systems in the AI era",
+    prompt: "Reframe components, patterns, and governance around dynamic model behavior and user trust.",
+    profiles: ["ui-ux-designer", "technical-architect", "product-ai"]
+  },
+  {
+    id: "architecture-as-product",
+    pillar: "Architecture and Platforms",
+    title: "Architecture decisions are product decisions now",
+    prompt: "Explain how latency, memory, auth, cost, and failure modes shape what users actually experience.",
+    profiles: ["technical-architect", "genai-engineer", "enterprise-leader", "product-ai"]
+  },
+  {
+    id: "model-gateway-architecture",
+    pillar: "Architecture and Platforms",
+    title: "The model gateway is becoming the new integration layer",
+    prompt: "Write about routing, cost controls, evals, policy, observability, and vendor optionality.",
+    profiles: ["technical-architect", "genai-engineer", "enterprise-leader"]
+  },
+  {
+    id: "scaling-ai-apps-boundaries",
+    pillar: "Architecture and Platforms",
+    title: "Scaling AI apps is mostly about boundaries",
+    prompt: "Challenge the idea that bigger models solve architecture problems; focus on data, queues, contracts, and blast radius.",
+    profiles: ["technical-architect", "genai-engineer"]
   },
   {
     id: "supply-chain-demand-sensing",
@@ -243,6 +285,25 @@ const PROFILE_PRESETS = [
     }
   },
   {
+    id: "ui-ux-designer",
+    label: "UI/UX Designer",
+    chip: "Design",
+    description: "Experience-led posts about product craft, design systems, AI UX, research, and trust.",
+    voice: {
+      tone: "Clear, human, craft-aware, practical, and insight-led",
+      audience: "Designers, product managers, researchers, founders, design leaders, and AI product teams",
+      pointOfView:
+        "Great design in the AI era turns uncertainty into understandable choices, trusted interactions, and humane systems",
+      credentials: "UX strategy, interaction design, research synthesis, design systems, accessibility, product craft, AI experience design",
+      avoid: "Dribbble aesthetics, vague empathy language, generic design quotes, beauty without behavior"
+    },
+    personalStyle: {
+      instructions:
+        "Open with a product moment, user hesitation, design trade-off, or deceptively simple interface question. Move from surface experience to the system behavior underneath it. Keep the post concrete, humane, and useful for teams building real products. End with a question about trust, clarity, or user agency.",
+      samples: ""
+    }
+  },
+  {
     id: "genai-engineer",
     label: "GenAI Engineer",
     chip: "Engineering",
@@ -258,6 +319,25 @@ const PROFILE_PRESETS = [
     personalStyle: {
       instructions:
         "Open with a concrete production failure, engineering trade-off, or deceptively simple technical question. Explain the system underneath the demo. Make the post useful to builders without turning it into documentation. Name failure modes and design principles.",
+      samples: ""
+    }
+  },
+  {
+    id: "technical-architect",
+    label: "Technical Architect",
+    chip: "Architecture",
+    description: "System-level posts about platforms, scalability, integration, reliability, security, and AI architecture.",
+    voice: {
+      tone: "Systems-minded, precise, commercially aware, pragmatic, and senior",
+      audience: "CTOs, architects, platform leaders, engineering managers, AI teams, and enterprise technology leaders",
+      pointOfView:
+        "Architecture creates advantage when teams make explicit trade-offs around reliability, cost, security, data boundaries, and change velocity",
+      credentials: "Enterprise architecture, cloud platforms, API design, reliability, security, integration patterns, AI platform architecture",
+      avoid: "Architecture astronaut language, vendor bingo, diagrams without operating consequences, unexplained acronyms"
+    },
+    personalStyle: {
+      instructions:
+        "Open with a production constraint, architecture trade-off, scaling failure, or platform decision that looks technical but changes the business outcome. Explain the system, name the hidden coupling, and land the operating implication. Keep it accessible to leaders while credible to architects.",
       samples: ""
     }
   },
@@ -1204,13 +1284,15 @@ function createLocalCritique(payload) {
   const hasIdea = Boolean((payload.userIdea || "").trim());
 
   return [
-    "Hook: Make the first line sharper and more specific. It should create tension before it explains.",
-    `Core idea: ${hasIdea ? "The draft uses the user idea, but the implication can be made more explicit." : "The draft would be stronger with a concrete user idea or lived trigger."}`,
+    "Scores: Hook 6/10, Originality 6/10, Clarity 7/10, Specificity 5/10, Usefulness 7/10, Human voice 6/10, LinkedIn readability 7/10.",
+    "Hook: Make the first line sharper, more specific, and less explanatory. It should create tension before it explains.",
+    `Core idea: ${hasIdea ? "The draft uses the user idea, but it should become the spine of the post." : "The draft would be stronger with a concrete user idea, lived trigger, or personal observation."}`,
+    "Specificity: Add one concrete example, tradeoff, operating detail, or observation that proves the claim.",
     "Structure: Keep the post moving from observation to tension to implication. Remove any paragraph that only repeats the same claim.",
-    "Originality: Push beyond a generic business lesson. Name the hidden bottleneck, trade-off, or human behavior underneath.",
-    `Engagement: ${hasQuestion ? "The closing question is present; make it more debatable." : "Add a closing question that invites a point of view."}`,
+    "Originality: Push beyond a generic business lesson. Name the hidden bottleneck, tradeoff, or human behavior underneath.",
+    `Engagement: ${hasQuestion ? "The closing question is present; make it softer and more debatable." : "Add a thoughtful closing line or soft question that invites a real point of view."}`,
     `Length: ${words} words. Aim for 130-220 words unless the story needs more room.`,
-    "Rewrite direction: Start with the strongest tension, add one concrete example or analogy, then end with a crisp leadership or domain implication."
+    "Rewrite direction: Start with the strongest tension, build around one clear insight, add one concrete example or analogy, then end with a crisp leadership or domain implication."
   ].join("\n");
 }
 
@@ -1228,18 +1310,20 @@ function createLocalRewrite(payload) {
   const idea = payload.userIdea || payload.topic.title;
   const firstLine = payload.generationSettings.viralityMode === "Debate spark"
     ? `What if the obvious take on ${idea.toLowerCase()} is the wrong one?`
-    : `The visible story is ${idea}.`;
+    : `The obvious story is ${idea}.`;
 
   return [
     firstLine,
     "",
-    "The deeper story is usually less convenient.",
+    "The useful story sits one layer lower.",
     "",
     "Most teams look at change through the lens of capability: what can the tool do, how fast can it do it, and where can we plug it into the workflow?",
     "",
     "But capability is rarely the real bottleneck.",
     "",
     "The harder question is whether the surrounding system is ready for the change: incentives, handoffs, governance, trust, and the human judgment that still has to sit between the tool and the outcome.",
+    "",
+    "That is where the tradeoff appears. A faster tool can create slower decisions if the operating model around it is still unclear.",
     "",
     "This is where many efforts lose momentum. They improve one node in the chain while the rest of the organization continues to run on old assumptions.",
     "",
@@ -1544,6 +1628,12 @@ renderAll();
 trackEvent("app_loaded", getAnalyticsContext({
   action: "initial_load"
 }));
+
+if ("serviceWorker" in navigator && window.location.protocol.startsWith("http")) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./sw.js").catch(() => {});
+  });
+}
 
 window.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden") {

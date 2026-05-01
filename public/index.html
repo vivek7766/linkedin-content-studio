@@ -3,7 +3,14 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="A profile-aware LinkedIn content studio for turning ideas into publish-ready posts." />
+    <meta name="theme-color" content="#0f766e" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Content Studio" />
     <title>LinkedIn Content Studio</title>
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" href="./app-icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="./app-icon.svg" />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
@@ -12,8 +19,12 @@
         <div>
           <p class="eyebrow">Multi-profile brand engine</p>
           <h1>LinkedIn Content Studio</h1>
+          <p class="topbar-copy">Choose a professional profile, tune the voice, and move from idea to polished post with a guided workflow.</p>
         </div>
-        <div class="week-pill" id="weekLabel"></div>
+        <div class="topbar-actions" aria-label="App shortcuts">
+          <a class="secondary-button nav-button" href="./analytics.html">Analytics</a>
+          <div class="week-pill" id="weekLabel"></div>
+        </div>
       </header>
 
       <main class="studio-grid">

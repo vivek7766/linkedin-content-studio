@@ -1,0 +1,34 @@
+{
+  "name": "LinkedIn Content Studio",
+  "short_name": "Content Studio",
+  "description": "A profile-aware LinkedIn content studio for turning ideas into publish-ready posts.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f7f8fb",
+  "theme_color": "#0f766e",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "./app-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Open Analytics",
+      "short_name": "Analytics",
+      "description": "View product usage and cost metrics.",
+      "url": "./analytics.html",
+      "icons": [
+        {
+          "src": "./app-icon.svg",
+          "sizes": "any",
+          "type": "image/svg+xml"
+        }
+      ]
+    }
+  ]
+}

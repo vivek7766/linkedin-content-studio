@@ -75,13 +75,22 @@ This endpoint returns whether Claude generation is active, which supported key n
 
 - `package.json` - npm metadata and `npm start` script.
 - `server.js` - local Node server, Claude API integration, prompt building, local fallback generation.
+- `LINKEDIN_POST_PROMPTS.md` - reusable LinkedIn prompt pack and recommended generation workflow.
 - `public/index.html` - app markup.
 - `public/app.js` - topic bank, state, browser interactions, local storage, generation request, fallback generation.
 - `public/analytics.html` - lightweight usage analytics dashboard.
 - `public/analytics.js` - analytics dashboard rendering logic.
 - `public/styles.css` - app styling.
+- `public/manifest.webmanifest` - PWA install metadata.
+- `public/sw.js` - service worker for app-shell caching and offline fallback.
+- `public/offline.html` - offline fallback page.
+- `public/app-icon.svg` - app icon used by the PWA manifest.
 - `PROJECT_NOTES.md` - this handoff file.
 - `ROADMAP_TO_1M_USERS.md` - milestone roadmap from POC to scaled web application.
+- `ARCHITECTURE_REVIEW_AND_SCALE_PLAN.md` - architecture review, hardening plan, and 1M-user scale path.
+- `docs/architecture/LinkedIn_Content_Studio_Technical_Architecture.pptx` - editable technical architecture deck.
+- `docs/architecture/architecture-preview-*.png` - rendered slide previews for visual QA.
+- `scripts/create_architecture_deck.mjs` - script to regenerate the architecture deck and previews.
 
 ## Current Features
 
@@ -96,13 +105,17 @@ This endpoint returns whether Claude generation is active, which supported key n
   - Consulting and Advisory
   - Market Analysis
   - Engineering and AI Systems
+  - Design and Experience
+  - Architecture and Platforms
   - Supply Chain Leadership
   - Leadership Systems
 - Profile selector:
   - Product x AI Leader
   - Entrepreneur / Founder
   - Consultant / Analyst
+  - UI/UX Designer
   - GenAI Engineer
+  - Technical Architect
   - Supply Chain Leader
   - Enterprise Leader
 - Pillar filter and "Surprise me" topic/angle picker.
@@ -139,10 +152,21 @@ This endpoint returns whether Claude generation is active, which supported key n
   - Critique draft
   - Rewrite draft
   - Final polish
+- Prompt quality controls:
+  - Strong, specific hooks instead of generic openings.
+  - One clear insight per post.
+  - Concrete examples, tradeoffs, observations, or operating details.
+  - Critique scores for hook, originality, clarity, specificity, usefulness, human voice, and LinkedIn readability.
+  - Final polish rules to remove fluff, repetition, buzzwords, and AI-sounding lines.
 - Draft word/character count.
 - Copy draft button.
 - Save to tracker button.
 - Post history/tracker stored in browser local storage.
+- Responsive PWA shell:
+  - Installable app manifest.
+  - Service worker app-shell caching.
+  - Offline fallback page.
+  - Responsive layout for laptop, tablet, and mobile.
 - First-party usage analytics:
   - DAU, MAU, and TAU
   - Total posts generated

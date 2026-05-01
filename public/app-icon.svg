@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="LinkedIn Content Studio icon">
+  <rect width="512" height="512" rx="112" fill="#0f766e"/>
+  <path d="M118 158c0-28 22-50 50-50h176c28 0 50 22 50 50v196c0 28-22 50-50 50H168c-28 0-50-22-50-50V158Z" fill="#ffffff" opacity="0.95"/>
+  <path d="M168 174h176M168 228h176M168 282h118" stroke="#0f766e" stroke-width="28" stroke-linecap="round"/>
+  <path d="M319 295l46 17-46 17-17 46-17-46-46-17 46-17 17-46 17 46Z" fill="#4f46e5"/>
+</svg>

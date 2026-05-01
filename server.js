@@ -26,9 +26,33 @@ const CLAUDE_CACHE_READ_COST_PER_MTOK = getNumberEnv(
 const MIME_TYPES = {
   ".html": "text/html; charset=utf-8",
   ".css": "text/css; charset=utf-8",
+  ".ico": "image/x-icon",
   ".js": "application/javascript; charset=utf-8",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
   ".json": "application/json; charset=utf-8",
-  ".svg": "image/svg+xml"
+  ".png": "image/png",
+  ".svg": "image/svg+xml",
+  ".webmanifest": "application/manifest+json; charset=utf-8"
+};
+
+const SECURITY_HEADERS = {
+  "x-content-type-options": "nosniff",
+  "referrer-policy": "strict-origin-when-cross-origin",
+  "permissions-policy": "camera=(), microphone=(), geolocation=(), payment=()",
+  "content-security-policy": [
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self'",
+    "img-src 'self' data:",
+    "font-src 'self'",
+    "connect-src 'self'",
+    "manifest-src 'self'",
+    "worker-src 'self'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'"
+  ].join("; ")
 };
 
 const ANTHROPIC_API_KEY_NAMES = ["ANTHROPIC_API_KEY", "ANTHROPIC_KEY", "CLAUDE_API_KEY"];
@@ -78,10 +102,21 @@ const analyticsEvents = loadAnalyticsEvents();
 
 function sendJson(res, status, payload) {
   res.writeHead(status, {
+    ...SECURITY_HEADERS,
     "content-type": "application/json; charset=utf-8",
     "cache-control": "no-store"
   });
   res.end(JSON.stringify(payload));
+}
+
+function sendText(res, status, message, extraHeaders = {}) {
+  res.writeHead(status, {
+    ...SECURITY_HEADERS,
+    "content-type": "text/plain; charset=utf-8",
+    "cache-control": "no-store",
+    ...extraHeaders
+  });
+  res.end(message);
 }
 
 function readBody(req) {
@@ -640,6 +675,35 @@ function getViralityGuidance(viralityMode, currentTrigger) {
   return `${base} If no current trigger is supplied, do not fabricate a real current event. Use the selected topic as the trigger.`;
 }
 
+const LINKEDIN_POST_QUALITY_RULES = [
+  "Start with a strong, specific hook. Avoid generic openings.",
+  "Make the post feel like it came from a real person with lived experience, not a content template.",
+  "Build around one clear insight instead of a list of shallow tips.",
+  "Add a specific example, tradeoff, observation, or operating detail.",
+  "Use short paragraphs and natural rhythm for LinkedIn readability.",
+  "Avoid corporate jargon, motivational fluff, fake certainty, and over-polished AI-sounding lines.",
+  "End with a thoughtful closing line or soft question that invites a real reply."
+];
+
+const LINKEDIN_FORBIDDEN_PHRASES = [
+  "in today's fast-paced world",
+  "game changer",
+  "I'm thrilled to announce",
+  "unlock your potential",
+  "leverage synergy",
+  "10x your growth",
+  "most people don't know",
+  "this changed everything"
+];
+
+function formatQualityRules() {
+  return LINKEDIN_POST_QUALITY_RULES.map((rule) => `- ${rule}`).join("\n");
+}
+
+function formatForbiddenPhrases() {
+  return LINKEDIN_FORBIDDEN_PHRASES.map((phrase) => `- "${phrase}"`).join("\n");
+}
+
 function buildPrompt(payload) {
   const profile = payload.profile || {};
   const profileLabel = sanitizeText(profile.label, "Professional");
@@ -669,9 +733,9 @@ function buildPrompt(payload) {
 
   return {
     system: [
-      "You write sharp, credible LinkedIn posts for professionals building distinctive personal brands.",
+      "You are an expert LinkedIn ghostwriter for founders, operators, engineers, and professionals building distinctive personal brands.",
       "Adapt the depth, examples, vocabulary, and business lens to the selected profile.",
-      "Make the writing specific, grounded, and useful. Avoid generic AI hype, fake certainty, and salesy language.",
+      "Make the writing specific, grounded, useful, and human. The post should feel like it came from a thoughtful person with real judgment.",
       "Use sample posts or articles only to infer style, rhythm, structure, and level of depth. Do not copy distinctive sentences, examples, or wording from the samples.",
       "Return only the post text. Do not add labels, commentary, markdown headings, or hashtags unless the user explicitly asks for them."
     ].join(" "),
@@ -698,6 +762,12 @@ function buildPrompt(payload) {
       "Reference sample posts or articles for tone calibration:",
       styleSamples,
       "",
+      "Quality bar:",
+      formatQualityRules(),
+      "",
+      "Avoid these phrases and patterns:",
+      formatForbiddenPhrases(),
+      "",
       "Style calibration notes:",
       "- Preserve the author's strategic, reflective, system-level reasoning while fitting the selected profile.",
       "- Prefer concrete analogies, named tensions, domain context, and crisp thesis lines.",
@@ -709,10 +779,10 @@ function buildPrompt(payload) {
       recentPosts,
       "",
       "Write one publish-ready LinkedIn post with:",
-      "- A scroll-stopping opening hook.",
+      "- A strong, specific opening hook.",
       "- If a user idea is supplied, make it the core input rather than treating it as a side note.",
-      "- A structured body: insight, concrete example, implication.",
-      "- A closing question that invites thoughtful replies.",
+      "- One clear insight, a concrete example or tradeoff, and a useful implication.",
+      "- A closing question or final line that invites thoughtful replies.",
       "- 130-220 words.",
       "- Natural line breaks for LinkedIn readability."
     ].join("\n")
@@ -888,19 +958,22 @@ function buildWorkflowPrompt(payload) {
 
   const stageInstructions = {
     critique: [
-      "Critique the draft as a senior LinkedIn editor.",
-      "Return concise, actionable notes only.",
-      "Cover hook, clarity, originality, structure, brand fit, style fit, and one rewrite direction.",
+      "Act as a strict LinkedIn content editor.",
+      "Score the draft from 1 to 10 on hook strength, originality, clarity, specificity, usefulness, human voice, and LinkedIn readability.",
+      "Identify what feels generic, weak, repetitive, artificial, or under-supported.",
+      "Give one clear rewrite direction that would make the post stronger.",
       "Do not rewrite the full post in this step."
     ].join(" "),
     rewrite: [
-      "Rewrite the draft using the critique.",
-      "Preserve the author's point of view and personal style, but make the argument sharper and more original.",
+      "Rewrite the draft using the critique and the quality bar.",
+      "Preserve the author's point of view and personal style, but make the argument sharper, more specific, and more original.",
+      "Use short paragraphs, one clear insight, a concrete example or tradeoff, and a thoughtful closing line or soft question.",
       "Return only the rewritten LinkedIn post, with natural line breaks."
     ].join(" "),
     polish: [
-      "Final polish the rewritten post for publishing.",
-      "Tighten the hook, remove filler, improve rhythm, keep the author's voice, and make the closing question sharper.",
+      "Final polish the rewritten post for publishing without changing the core message.",
+      "Improve the opening hook, flow, sentence rhythm, clarity, specificity, and ending.",
+      "Remove fluff, repetition, buzzwords, corporate jargon, and overly polished AI-sounding lines.",
       "Return only the final LinkedIn post."
     ].join(" ")
   };
@@ -935,6 +1008,12 @@ function buildWorkflowPrompt(payload) {
       "",
       "Reference sample posts or articles for tone calibration:",
       styleSamples,
+      "",
+      "Quality bar:",
+      formatQualityRules(),
+      "",
+      "Avoid these phrases and patterns:",
+      formatForbiddenPhrases(),
       "",
       "Current draft:",
       draft || "No draft supplied.",
@@ -972,13 +1051,14 @@ function fallbackCritique(payload) {
   const hasQuestion = draft.includes("?");
 
   return [
-    "Hook: Make the first line sharper and more specific. It should create tension before it explains.",
-    `Core idea: ${hasIdea ? "The draft has a user idea to build from; make the implication more explicit." : "Add a concrete user idea or lived trigger to make the post more ownable."}`,
-    "Structure: Move from observation to tension to implication. Remove repetition.",
-    "Originality: Name the hidden bottleneck, trade-off, or human behavior underneath the topic.",
-    `Engagement: ${hasQuestion ? "The closing question is present; make it more debatable." : "Add a closing question that invites a point of view."}`,
+    "Scores: Hook 6/10, Originality 6/10, Clarity 7/10, Specificity 5/10, Usefulness 7/10, Human voice 6/10, LinkedIn readability 7/10.",
+    "Hook: Make the first line sharper, more specific, and less explanatory. It should create tension before it explains.",
+    `Core idea: ${hasIdea ? "The draft has a user idea to build from; make that idea the spine of the post." : "Add a concrete user idea, lived trigger, or personal observation to make the post more ownable."}`,
+    "Specificity: Add one concrete example, tradeoff, operating detail, or observation that proves the claim.",
+    "Originality: Name the hidden bottleneck, tradeoff, or human behavior underneath the topic.",
+    `Engagement: ${hasQuestion ? "The closing question is present; make it softer and more debatable." : "Add a thoughtful closing line or soft question that invites a real point of view."}`,
     `Length: ${words} words. Aim for 130-220 words unless the story needs more room.`,
-    "Rewrite direction: Lead with the strongest tension, add one concrete example or analogy, then land the leadership or domain implication."
+    "Rewrite direction: Lead with the strongest tension, build around one clear insight, add one concrete example or analogy, then land the leadership or domain implication."
   ].join("\n");
 }
 
@@ -993,15 +1073,17 @@ function fallbackRewrite(payload) {
   );
 
   return [
-    `The visible story is ${idea}.`,
+    `The obvious story is ${idea}.`,
     "",
-    "The deeper story is usually less convenient.",
+    "The useful story sits one layer lower.",
     "",
     "Most teams look at change through the lens of capability: what can the tool do, how fast can it do it, and where can we plug it into the workflow?",
     "",
     "But capability is rarely the real bottleneck.",
     "",
     "The harder question is whether the surrounding system is ready for the change: incentives, handoffs, governance, trust, and the human judgment that still has to sit between the tool and the outcome.",
+    "",
+    "That is where the tradeoff appears. A faster tool can create slower decisions if the operating model around it is still unclear.",
     "",
     `For ${audience}, the implication is direct: ${pointOfView}.`,
     "",
@@ -1125,31 +1207,44 @@ async function generatePost(payload) {
   };
 }
 
+function isInsideRoot(filePath) {
+  return filePath === ROOT || filePath.startsWith(`${ROOT}${path.sep}`);
+}
+
 function serveStatic(req, res) {
   const url = new URL(req.url, `http://${req.headers.host}`);
-  const requestedPath = decodeURIComponent(url.pathname);
+  let requestedPath = "/";
+
+  try {
+    requestedPath = decodeURIComponent(url.pathname);
+  } catch {
+    sendText(res, 400, "Bad request");
+    return;
+  }
+
   const relativePath = requestedPath === "/" ? "index.html" : requestedPath.replace(/^\/+/, "");
   const filePath = path.normalize(path.join(ROOT, relativePath));
 
-  if (!filePath.startsWith(ROOT)) {
-    res.writeHead(403);
-    res.end("Forbidden");
+  if (!isInsideRoot(filePath)) {
+    sendText(res, 403, "Forbidden");
     return;
   }
 
   fs.readFile(filePath, (error, contents) => {
     if (error) {
-      res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
-      res.end("Not found");
+      sendText(res, 404, "Not found");
       return;
     }
 
     const ext = path.extname(filePath).toLowerCase();
     res.writeHead(200, {
+      ...SECURITY_HEADERS,
       "content-type": MIME_TYPES[ext] || "application/octet-stream",
-      "cache-control": "no-store"
+      "cache-control": ext === ".html" || ext === ".js" || ext === ".css" || ext === ".webmanifest"
+        ? "no-cache"
+        : "public, max-age=86400"
     });
-    res.end(contents);
+    res.end(req.method === "HEAD" ? undefined : contents);
   });
 }
 
@@ -1305,8 +1400,19 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  res.writeHead(405, { "allow": "GET, HEAD, POST" });
-  res.end("Method not allowed");
+  sendText(res, 405, "Method not allowed", { "allow": "GET, HEAD, POST" });
+});
+
+function shutdown(signal) {
+  console.log(`${signal} received; closing HTTP server.`);
+  server.close(() => {
+    process.exit(0);
+  });
+}
+
+server.on("error", (error) => {
+  console.error(`HTTP server failed to start: ${error.message}`);
+  process.exit(1);
 });
 
 server.listen(PORT, HOST, () => {
@@ -1323,3 +1429,6 @@ server.listen(PORT, HOST, () => {
     }
   }
 });
+
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));
