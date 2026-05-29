@@ -84,10 +84,12 @@ const ANALYTICS_NUMBER_KEYS = new Set([
   "currentTriggerLength",
   "draftWordCount",
   "finalWordCount",
+  "graderScore",
   "historyCount",
   "inputTokens",
   "latencyMs",
   "outputTokens",
+  "briefFilledCount",
   "sampleCount",
   "sampleWordCount",
   "totalTokens",
@@ -102,6 +104,25 @@ const ANALYTICS_DECIMAL_KEYS = new Set([
 ]);
 const ANALYTICS_BOOLEAN_KEYS = new Set(["success", "usedFallback"]);
 const analyticsEvents = loadAnalyticsEvents();
+
+const DRAFT_GRADER_CRITERIA = [
+  "The post has an author-owned point of view, not a generic explanation of the topic.",
+  "The hook creates tension, surprise, or a sharp reframing within the first two lines.",
+  "The argument uses the selected profile, user idea, and content brief instead of drifting into broad thought leadership.",
+  "The post uses at least one concrete anchor: anecdote, operating detail, data point, named example, tradeoff, or lived observation.",
+  "The writing reflects the supplied tone samples or Style DNA without copying sample wording or fabricating personal details.",
+  "The reasoning progresses cleanly from hook to insight to implication to ending.",
+  "The post avoids generic AI/content cliches, vague hype, filler, and overly polished corporate language.",
+  "The ending invites a meaningful point of view, debate, or reflection from the intended audience."
+];
+
+const DRAFT_GRADER_MANDATORY_CRITERIA = [
+  "It must be a complete LinkedIn post, not notes, an outline, or a critique.",
+  "It must be grounded in the user's supplied idea, profile, topic, or content brief.",
+  "It must not copy distinctive sentences or examples from the tone samples.",
+  "It must not include prompt, process, or meta commentary.",
+  "It must not invent personal facts, client names, metrics, or experiences that were not supplied."
+];
 
 function sendJson(res, status, payload) {
   res.writeHead(status, {
@@ -292,6 +313,84 @@ function calculateUsageCost(usage = {}) {
     outputTokenCostUsd: roundMoney(outputTokenCostUsd),
     cacheTokenCostUsd: roundMoney(cacheTokenCostUsd),
     totalCostUsd: roundMoney(totalCostUsd)
+  };
+}
+
+function combineUsageCost(...usageItems) {
+  return usageItems.reduce((combined, usage) => ({
+    inputTokens: combined.inputTokens + Number(usage?.inputTokens || 0),
+    outputTokens: combined.outputTokens + Number(usage?.outputTokens || 0),
+    cacheCreationInputTokens: combined.cacheCreationInputTokens + Number(usage?.cacheCreationInputTokens || 0),
+    cacheReadInputTokens: combined.cacheReadInputTokens + Number(usage?.cacheReadInputTokens || 0),
+    totalTokens: combined.totalTokens + Number(usage?.totalTokens || 0),
+    inputTokenCostUsd: roundMoney(combined.inputTokenCostUsd + Number(usage?.inputTokenCostUsd || 0)),
+    outputTokenCostUsd: roundMoney(combined.outputTokenCostUsd + Number(usage?.outputTokenCostUsd || 0)),
+    cacheTokenCostUsd: roundMoney(combined.cacheTokenCostUsd + Number(usage?.cacheTokenCostUsd || 0)),
+    totalCostUsd: roundMoney(combined.totalCostUsd + Number(usage?.totalCostUsd || 0))
+  }), calculateUsageCost());
+}
+
+function getClaudeText(data = {}) {
+  return (data.content || [])
+    .filter((part) => part.type === "text")
+    .map((part) => part.text)
+    .join("\n")
+    .trim();
+}
+
+function extractJsonObject(text) {
+  const cleanText = sanitizeBlock(text, "", 12000)
+    .replace(/^```(?:json)?/i, "")
+    .replace(/```$/i, "")
+    .trim();
+
+  try {
+    return JSON.parse(cleanText);
+  } catch {
+    const start = cleanText.indexOf("{");
+    const end = cleanText.lastIndexOf("}");
+    if (start === -1 || end === -1 || end <= start) {
+      throw new Error("No JSON object found in grader response");
+    }
+    return JSON.parse(cleanText.slice(start, end + 1));
+  }
+}
+
+function toStringList(value, fallback = []) {
+  const items = Array.isArray(value) ? value : fallback;
+  return items
+    .map((item) => sanitizeText(item))
+    .filter(Boolean)
+    .slice(0, 5);
+}
+
+function normalizeGraderEvaluation(evaluation = {}) {
+  const scoreValue = Number(evaluation.score);
+  const score = Math.max(1, Math.min(10, Number.isFinite(scoreValue) ? Math.round(scoreValue) : 5));
+  const verdict = score >= 9
+    ? "Excellent"
+    : score >= 8
+      ? "Strong"
+      : score >= 7
+        ? "Publishable with edits"
+        : score >= 4
+          ? "Needs rewrite"
+          : "Not publishable";
+
+  return {
+    score,
+    maxScore: 10,
+    pass: score >= 7,
+    verdict,
+    strengths: toStringList(evaluation.strengths, ["The draft has a recognizable topic and enough structure to evaluate."]).slice(0, 3),
+    weaknesses: toStringList(evaluation.weaknesses, ["The draft needs sharper specificity, stronger voice fit, and a more original tension."]).slice(0, 3),
+    reasoning: sanitizeBlock(
+      evaluation.reasoning,
+      "The grader could not return detailed reasoning, so treat the score as directional.",
+      1200
+    ),
+    criteria: DRAFT_GRADER_CRITERIA,
+    mandatoryCriteria: DRAFT_GRADER_MANDATORY_CRITERIA
   };
 }
 
@@ -528,6 +627,7 @@ function summarizeAnalyticsWindow(events) {
   const saved = getCount(events, "post_saved");
   const apiGenerateEvents = events.filter((event) => event.event === "api_generate_completed");
   const apiWorkflowEvents = events.filter((event) => event.event === "api_workflow_completed");
+  const gradedWorkflowEvents = apiWorkflowEvents.filter((event) => Number(event.properties?.graderScore) > 0);
   const generationAttempts = draftRequested || apiGenerateCompleted + apiGenerateFailed;
   const generationCompletions = draftGenerated;
   const aiUsage = summarizeAiUsage(events, postEvents);
@@ -576,6 +676,14 @@ function summarizeAnalyticsWindow(events) {
       rewriteMs: averageProperty(apiWorkflowEvents.filter((event) => event.properties?.stage === "rewrite"), "latencyMs"),
       polishMs: averageProperty(apiWorkflowEvents.filter((event) => event.properties?.stage === "polish"), "latencyMs")
     },
+    grader: {
+      evaluatedDrafts: gradedWorkflowEvents.length,
+      averageScore: averageProperty(gradedWorkflowEvents, "graderScore"),
+      passRate: rate(
+        gradedWorkflowEvents.filter((event) => Number(event.properties?.graderScore) >= 7).length,
+        gradedWorkflowEvents.length
+      )
+    },
     topProfiles: getTopValues(events, "profileId"),
     postsByProfile: getTopValues(postEvents, "profileId", 20),
     topTopics: getTopValues(events, "topicId"),
@@ -620,6 +728,8 @@ function buildAnalyticsSummary() {
       "total_dollar_consumption",
       "copy_or_save_rate",
       "generation_latency",
+      "average_grader_score",
+      "grader_pass_rate",
       "failure_rate"
     ],
     activeUsers: {
@@ -633,7 +743,8 @@ function buildAnalyticsSummary() {
       "DAU is unique active visitors in the last 24 hours.",
       "MAU is unique active visitors in the last 30 days.",
       "TAU is total unique active visitors captured in the event store.",
-      "Dollar values are estimates from Anthropic usage metadata and configured per-million-token prices."
+      "Dollar values are estimates from Anthropic usage metadata and configured per-million-token prices.",
+      "Grader scores are aggregate-only; raw drafts and critique text are not stored in analytics."
     ]
   };
 }
@@ -650,6 +761,7 @@ function isAnalyticsSummaryAuthorized(req) {
 }
 
 function payloadContext(payload = {}) {
+  const contentBrief = getContentBrief(payload);
   return {
     profileId: payload.profile?.id,
     profileLabel: payload.profile?.label,
@@ -660,6 +772,7 @@ function payloadContext(payload = {}) {
     viralityMode: payload.generationSettings?.viralityMode,
     userIdeaLength: sanitizeText(payload.userIdea).length,
     currentTriggerLength: sanitizeText(payload.generationSettings?.currentAffair).length,
+    briefFilledCount: getBriefFilledCount(contentBrief),
     sampleWordCount: sanitizeText(payload.personalStyle?.samples).split(/\s+/).filter(Boolean).length
   };
 }
@@ -730,6 +843,123 @@ function formatForbiddenPhrases() {
   return LINKEDIN_FORBIDDEN_PHRASES.map((phrase) => `- "${phrase}"`).join("\n");
 }
 
+function splitStyleSamples(samples) {
+  const text = sanitizeBlock(samples, "", 22000);
+  if (!text) {
+    return [];
+  }
+
+  const numberedSamples = text
+    .split(/\n\s*\n(?=\s*\d+\.\s)/)
+    .map((sample) => sample.trim())
+    .filter(Boolean);
+
+  return numberedSamples.length > 1 ? numberedSamples : [text];
+}
+
+function getFirstMeaningfulLine(sample) {
+  return sample
+    .split(/\n+/)
+    .map((line) => sanitizeText(line.replace(/^\d+\.\s*/, "")))
+    .find(Boolean) || "";
+}
+
+function summarizeOpeningPatterns(samples) {
+  const openings = samples
+    .map(getFirstMeaningfulLine)
+    .filter(Boolean)
+    .slice(0, 6)
+    .map((line) => `- "${line.slice(0, 170)}${line.length > 170 ? "..." : ""}"`);
+
+  return openings.length ? openings.join("\n") : "- No sample openings available.";
+}
+
+function detectStyleMoves(sampleText) {
+  const text = sanitizeText(sampleText).toLowerCase();
+  const moves = [];
+
+  if (/vande bharat|hyrox|stack|qualia|patience|red|doctor|post-scarcity|simulation/.test(text)) {
+    moves.push("Uses concrete analogies or cultural/lived references to make an abstract idea visible.");
+  }
+
+  if (/paradox|dilemma|trap|illusion|contrarian|obvious|careful|wrong one|quietly changed/.test(text)) {
+    moves.push("Names a tension, paradox, trap, or category shift before offering the point of view.");
+  }
+
+  if (/system|workflow|silo|downstream|operating|decision|incentive|bottleneck|process/.test(text)) {
+    moves.push("Moves from individual behavior to system-level consequences and operating constraints.");
+  }
+
+  if (/but here's|here's what|the useful|it is not|it's not enough|the floor|the ceiling|only one/.test(text)) {
+    moves.push("Uses short thesis lines to reframe the argument after the setup.");
+  }
+
+  if (/\?/.test(sampleText)) {
+    moves.push("Ends or pivots with questions that invite real disagreement rather than easy applause.");
+  }
+
+  if (/i almost|i keep|lately|first time|i didn't|my/.test(text)) {
+    moves.push("Allows personal experience when it sharpens the business or leadership lesson.");
+  }
+
+  return moves.length ? moves : [
+    "Builds from a specific observation into a broader professional implication.",
+    "Keeps the argument reflective, strategic, and grounded."
+  ];
+}
+
+function buildStyleDna(personalStyle = {}) {
+  const samples = splitStyleSamples(personalStyle.samples);
+  const sampleText = sanitizeBlock(personalStyle.samples, "", 22000);
+  const moves = [...new Set(detectStyleMoves(sampleText))];
+  const wordCount = sampleText ? sampleText.split(/\s+/).filter(Boolean).length : 0;
+
+  return [
+    `Sample bank: ${samples.length} sample${samples.length === 1 ? "" : "s"}, ${wordCount} words.`,
+    "Observed openings:",
+    summarizeOpeningPatterns(samples),
+    "",
+    "Author style DNA to enforce:",
+    ...moves.map((move) => `- ${move}`),
+    "- Prefer one sharp central claim over a list of tips.",
+    "- Build the post as: concrete trigger -> tension/paradox -> system insight -> practical implication -> memorable closing question or line.",
+    "- Use plain, senior, reflective language. The post should feel argued, not generated.",
+    "- If an anecdote is used, make it specific enough to feel real but do not invent biographical facts not supplied by the user.",
+    "- Do not copy sample examples, named analogies, or distinctive phrasing unless the user supplied them for this post."
+  ].join("\n");
+}
+
+function getContentBrief(payload = {}) {
+  const brief = payload.contentBrief || payload.brief || {};
+  return {
+    thesis: sanitizeBlock(brief.thesis, "", 1200),
+    commonBelief: sanitizeBlock(brief.commonBelief, "", 1200),
+    anecdote: sanitizeBlock(brief.anecdote, "", 1600),
+    evidence: sanitizeBlock(brief.evidence, "", 1600),
+    takeaway: sanitizeBlock(brief.takeaway, "", 1200)
+  };
+}
+
+function getBriefFilledCount(brief = {}) {
+  return Object.values(brief).filter((value) => sanitizeText(value).length > 0).length;
+}
+
+function formatContentBrief(brief = {}) {
+  const rows = [
+    ["Author thesis", brief.thesis],
+    ["Common belief to challenge", brief.commonBelief],
+    ["Anecdote or lived trigger", brief.anecdote],
+    ["Evidence, example, or operating detail", brief.evidence],
+    ["Reader takeaway", brief.takeaway]
+  ].filter(([, value]) => sanitizeText(value));
+
+  if (!rows.length) {
+    return "No structured brief supplied. Infer a brief from the user idea and selected topic, but do not invent personal facts.";
+  }
+
+  return rows.map(([label, value]) => `${label}: ${value}`).join("\n");
+}
+
 function buildPrompt(payload) {
   const linkedInPromptSkill = payload.linkedInPromptSkill || getLinkedInPromptSkill();
   const profile = payload.profile || {};
@@ -750,6 +980,8 @@ function buildPrompt(payload) {
     "Use a reflective, strategic, senior professional voice with concrete analogies and original insight."
   );
   const styleSamples = sanitizeBlock(personalStyle.samples, "No sample posts provided.", 18000);
+  const styleDna = buildStyleDna(personalStyle);
+  const contentBrief = getContentBrief(payload);
   const history = Array.isArray(payload.history) ? payload.history.slice(0, 8) : [];
 
   const recentPosts = history.length
@@ -760,11 +992,13 @@ function buildPrompt(payload) {
 
   return {
     system: [
-      "You are an expert LinkedIn ghostwriter for founders, operators, engineers, and professionals building distinctive personal brands.",
+      "You are a senior LinkedIn ghostwriter and editorial strategist for distinctive professional voices.",
+      "Your job is style transfer with judgment: the output must sound like the author, not like a generic content assistant.",
       `Always apply the prompt skill loaded from ${LINKEDIN_PROMPT_SKILL_FILE}; it is the source of truth for post quality, critique, rewrite, and polish behavior.`,
       "Adapt the depth, examples, vocabulary, and business lens to the selected profile.",
       "Make the writing specific, grounded, useful, and human. The post should feel like it came from a thoughtful person with real judgment.",
-      "Use sample posts or articles only to infer style, rhythm, structure, and level of depth. Do not copy distinctive sentences, examples, or wording from the samples.",
+      "Use sample posts or articles to infer style DNA, rhythm, structure, argument shape, and level of depth. Do not copy distinctive sentences, examples, or wording from the samples.",
+      "Before returning the post, silently reject any draft that could be produced without the supplied samples or brief.",
       "Return only the post text. Do not add labels, commentary, markdown headings, or hashtags unless the user explicitly asks for them."
     ].join(" "),
     user: [
@@ -784,11 +1018,17 @@ function buildPrompt(payload) {
       `Virality Lens: ${viralityMode}`,
       `Virality guidance: ${getViralityGuidance(viralityMode, currentTrigger)}`,
       "",
+      "Content brief:",
+      formatContentBrief(contentBrief),
+      "",
       `${LINKEDIN_PROMPT_SKILL_FILE} skill instructions:`,
       linkedInPromptSkill || "Prompt skill file could not be loaded. Fall back to the quality bar below.",
       "",
       "Personal writing instructions:",
       styleInstructions,
+      "",
+      "Extracted author Style DNA:",
+      styleDna,
       "",
       "Reference sample posts or articles for tone calibration:",
       styleSamples,
@@ -801,6 +1041,8 @@ function buildPrompt(payload) {
       "",
       "Style calibration notes:",
       "- Preserve the author's strategic, reflective, system-level reasoning while fitting the selected profile.",
+      "- Use at least three Style DNA moves in the final post.",
+      "- If the structured brief contains a thesis, assumption, anecdote, evidence, or takeaway, make those the spine of the post.",
       "- Prefer concrete analogies, named tensions, domain context, and crisp thesis lines.",
       "- For viral/current affairs posts, use a timely trigger to reveal a deeper domain truth, not as shallow trend-chasing.",
       "- Let paragraphs breathe with LinkedIn-friendly line breaks.",
@@ -812,6 +1054,7 @@ function buildPrompt(payload) {
       "Write one publish-ready LinkedIn post with:",
       "- A strong, specific opening hook.",
       "- If a user idea is supplied, make it the core input rather than treating it as a side note.",
+      "- A visible author point of view, not neutral commentary.",
       "- One clear insight, a concrete example or tradeoff, and a useful implication.",
       "- A closing question or final line that invites thoughtful replies.",
       "- 130-220 words.",
@@ -836,10 +1079,20 @@ function fallbackPost(payload) {
   const viralityMode = sanitizeText(generationSettings.viralityMode, "Insight-led");
   const currentTrigger = sanitizeText(generationSettings.currentAffair);
   const hasStyleSamples = sanitizeText(personalStyle.samples).length > 0;
+  const contentBrief = getContentBrief(payload);
   const triggerPhrase = currentTrigger ? currentTrigger.split(/[.!?\n]/)[0].trim() : topicPhrase;
   const ideaLine = userIdea
     ? `The starting point is simple: ${userIdea}`
+    : contentBrief.thesis
+    ? `The thesis is simple: ${contentBrief.thesis}`
     : `The useful conversation starts with ${topicPhrase}.`;
+  const briefLine = contentBrief.commonBelief
+    ? `The common belief is that ${contentBrief.commonBelief}. But that is only the surface layer.`
+    : contentBrief.anecdote
+    ? `The anchor is concrete: ${contentBrief.anecdote}`
+    : contentBrief.evidence
+    ? `The proof point matters: ${contentBrief.evidence}`
+    : "";
   const audience = sanitizeText(voice.audience, "domain peers and business leaders");
   const pointOfView = sanitizeText(
     voice.pointOfView,
@@ -951,6 +1204,8 @@ function fallbackPost(payload) {
     "",
     ideaLine,
     "",
+    briefLine,
+    briefLine ? "" : null,
     middleByAngle[angle] || middleByAngle.Teach,
     "",
     styleModeLine[styleMode] || styleModeLine.Balanced,
@@ -960,7 +1215,7 @@ function fallbackPost(payload) {
     viralityMode === "Debate spark"
       ? "Which side of this debate are you on?"
       : "Where are you seeing this actually change the way work gets done, not just the language around it?"
-  ].join("\n");
+  ].filter((line) => line !== null).join("\n");
 }
 
 function buildWorkflowPrompt(payload) {
@@ -976,6 +1231,9 @@ function buildWorkflowPrompt(payload) {
   const draft = sanitizeBlock(payload.draft, "", 9000);
   const critique = sanitizeBlock(payload.critique, "", 5000);
   const rewrite = sanitizeBlock(payload.rewrite, "", 9000);
+  const graderEvaluation = payload.graderEvaluation
+    ? sanitizeBlock(JSON.stringify(payload.graderEvaluation, null, 2), "", 3000)
+    : "";
   const voice = payload.voice || {};
   const personalStyle = payload.personalStyle || {};
   const generationSettings = payload.generationSettings || {};
@@ -987,35 +1245,64 @@ function buildWorkflowPrompt(payload) {
     "Use a reflective, strategic, senior professional voice with concrete analogies and original insight."
   );
   const styleSamples = sanitizeBlock(personalStyle.samples, "No sample posts provided.", 12000);
+  const styleDna = buildStyleDna(personalStyle);
+  const contentBrief = getContentBrief(payload);
 
   const stageInstructions = {
     critique: [
-      "Act as a strict LinkedIn content editor.",
-      "Score the draft from 1 to 10 on hook strength, originality, clarity, specificity, usefulness, human voice, and LinkedIn readability.",
-      "Identify what feels generic, weak, repetitive, artificial, or under-supported.",
-      "Give one clear rewrite direction that would make the post stronger.",
+      "Act as a demanding editorial director, not a scoring bot.",
+      "Diagnose whether the draft uses the author's Style DNA, content brief, selected profile, and topic with enough specificity.",
+      "Do not begin with category scores. Start with the single biggest editorial problem.",
+      "Identify generic lines, weak reasoning, missing proof, missed sample-style patterns, and places where the draft sounds like AI.",
+      "Return actionable rewrite instructions, not encouragement.",
       "Do not rewrite the full post in this step."
     ].join(" "),
     rewrite: [
-      "Rewrite the draft using the critique and the quality bar.",
+      "Rewrite the draft using the critique as the edit brief.",
+      "Use the grader evaluation as a hard quality bar; directly address low-scoring criteria instead of cosmetically editing sentences.",
       "Preserve the author's point of view and personal style, but make the argument sharper, more specific, and more original.",
+      "Use at least three Style DNA moves. Use the content brief as the spine if any brief fields are supplied.",
       "Use short paragraphs, one clear insight, a concrete example or tradeoff, and a thoughtful closing line or soft question.",
+      "Delete generic framing instead of polishing it.",
       "Return only the rewritten LinkedIn post, with natural line breaks."
     ].join(" "),
     polish: [
       "Final polish the rewritten post for publishing without changing the core message.",
       "Improve the opening hook, flow, sentence rhythm, clarity, specificity, and ending.",
       "Remove fluff, repetition, buzzwords, corporate jargon, and overly polished AI-sounding lines.",
+      "Keep the author's sample-driven rhythm and do not flatten distinctive phrasing into generic professional writing.",
       "Return only the final LinkedIn post."
     ].join(" ")
   };
 
+  const critiqueOutputFormat = [
+    "For critique stage, use this exact format:",
+    "EDITORIAL DIAGNOSIS",
+    "- Core problem: one blunt sentence.",
+    "- Generic or weak lines: quote or identify up to three lines that should be cut or rewritten.",
+    "- Voice mismatch: explain where it fails the author's Style DNA.",
+    "- Missing specificity: name the example, detail, evidence, or anecdote needed.",
+    "- Argument gap: explain what reasoning step is missing.",
+    "- LinkedIn risk: say whether it feels skippable, derivative, too polished, or too abstract.",
+    "",
+    "REWRITE STRATEGY",
+    "- New hook direction:",
+    "- Concrete anchor to add:",
+    "- Thesis line to sharpen:",
+    "- Ending move:",
+    "",
+    "QUALITY VERDICT",
+    "- Publishable: Yes / Almost / No",
+    "- Overall score: X/10"
+  ].join("\n");
+
   return {
     system: [
-      "You are an expert LinkedIn editor for professionals building distinctive personal brands.",
+      "You are a senior LinkedIn editorial director for professionals building distinctive personal brands.",
+      "Be specific, unsentimental, and practical. Your job is to protect the author's voice from generic content.",
       `Always apply the prompt skill loaded from ${LINKEDIN_PROMPT_SKILL_FILE}; it is the source of truth for post quality, critique, rewrite, and polish behavior.`,
       "Adapt edits to the selected profile's domain, audience, credibility signals, and business lens.",
-      "Use sample posts or articles only to infer style, rhythm, structure, and level of depth. Do not copy distinctive sentences, examples, or wording from the samples.",
+      "Use sample posts or articles to infer style DNA, rhythm, structure, argument shape, and level of depth. Do not copy distinctive sentences, examples, or wording from the samples.",
       "Keep the author's voice original, strategic, grounded, and senior."
     ].join(" "),
     user: [
@@ -1036,11 +1323,19 @@ function buildWorkflowPrompt(payload) {
       `Credibility signals: ${sanitizeText(voice.credentials, "domain experience, operating judgment, market awareness, and practical execution")}`,
       `Avoid: ${sanitizeText(voice.avoid, "jargon, breathless hype, em dashes, generic thought leadership")}`,
       "",
+      "Content brief:",
+      formatContentBrief(contentBrief),
+      "",
       `${LINKEDIN_PROMPT_SKILL_FILE} skill instructions:`,
       linkedInPromptSkill || "Prompt skill file could not be loaded. Fall back to the quality bar below.",
       "",
       "Personal writing instructions:",
       styleInstructions,
+      "",
+      "Extracted author Style DNA:",
+      styleDna,
+      "",
+      stage === "critique" ? critiqueOutputFormat : "",
       "",
       "Reference sample posts or articles for tone calibration:",
       styleSamples,
@@ -1057,9 +1352,205 @@ function buildWorkflowPrompt(payload) {
       "Critique notes:",
       critique || "No critique supplied.",
       "",
+      "Grader evaluation:",
+      graderEvaluation || "No grader evaluation supplied.",
+      "",
       "Rewrite version:",
       rewrite || "No rewrite supplied."
     ].join("\n")
+  };
+}
+
+function buildDraftGraderPrompt(payload, critiqueText = "") {
+  const profile = payload.profile || {};
+  const voice = payload.voice || {};
+  const personalStyle = payload.personalStyle || {};
+  const generationSettings = payload.generationSettings || {};
+  const contentBrief = getContentBrief(payload);
+  const taskInputs = {
+    profile: {
+      label: sanitizeText(profile.label, "Professional"),
+      description: sanitizeText(profile.description, "")
+    },
+    topic: {
+      title: sanitizeText(payload.topic?.title, "professional insight"),
+      pillar: sanitizeText(payload.topic?.pillar, "Professional Insight")
+    },
+    angle: sanitizeText(payload.angle, "Teach"),
+    userIdea: sanitizeBlock(payload.userIdea, "", 2500),
+    contentBrief,
+    styleMode: sanitizeText(generationSettings.styleMode, "Balanced"),
+    viralityMode: sanitizeText(generationSettings.viralityMode, "Insight-led"),
+    currentTrigger: sanitizeBlock(generationSettings.currentAffair, "", 1600),
+    voice: {
+      tone: sanitizeText(voice.tone, ""),
+      audience: sanitizeText(voice.audience, ""),
+      pointOfView: sanitizeText(voice.pointOfView, ""),
+      credibility: sanitizeText(voice.credentials, ""),
+      avoid: sanitizeText(voice.avoid, "")
+    },
+    styleInstructions: sanitizeBlock(personalStyle.instructions, "", 2500),
+    styleSamples: sanitizeBlock(personalStyle.samples, "", 6000)
+  };
+
+  return {
+    system: [
+      "You are a rigorous model grader for LinkedIn post quality.",
+      "Use the evaluation method from prompt evals: grade only against the listed criteria, use the full 1-10 scale, and be willing to give low scores.",
+      "You are not the editor in this step. Do not rewrite the post. Do not add new criteria beyond the supplied rubric."
+    ].join(" "),
+    user: [
+      "Your task is to evaluate the following AI-generated LinkedIn post with EXTREME RIGOR.",
+      "",
+      "Original task description:",
+      "<task_description>",
+      "Write a distinctive LinkedIn post for the selected professional profile, using the user idea, content brief, voice settings, and tone samples. The post should be publish-ready, specific, original, and aligned to the author's style.",
+      "</task_description>",
+      "",
+      "Original task inputs:",
+      "<task_inputs>",
+      JSON.stringify(taskInputs, null, 2),
+      "</task_inputs>",
+      "",
+      "Solution to Evaluate:",
+      "<solution>",
+      sanitizeBlock(payload.draft, "", 9000) || "No draft supplied.",
+      "</solution>",
+      "",
+      critiqueText
+        ? [
+            "Editorial critique context:",
+            "<critique>",
+            sanitizeBlock(critiqueText, "", 3000),
+            "</critique>",
+            "Use the critique only as supporting context. Grade the solution itself against the criteria below."
+          ].join("\n")
+        : "",
+      "",
+      "Criteria you should use to evaluate the solution:",
+      "<criteria>",
+      DRAFT_GRADER_CRITERIA.map((criterion) => `- ${criterion}`).join("\n"),
+      "</criteria>",
+      "",
+      "Mandatory Requirements - ANY VIOLATION MEANS AUTOMATIC FAILURE (score of 3 or lower):",
+      "<extra_important_criteria>",
+      DRAFT_GRADER_MANDATORY_CRITERIA.map((criterion) => `- ${criterion}`).join("\n"),
+      "</extra_important_criteria>",
+      "",
+      "Scoring Guidelines:",
+      "* Score 1-3: Solution fails to meet one or more mandatory requirements.",
+      "* Score 4-6: Solution meets all mandatory requirements but has significant deficiencies in secondary criteria.",
+      "* Score 7-8: Solution meets all mandatory requirements and most secondary criteria, with minor issues.",
+      "* Score 9-10: Solution meets all mandatory and secondary criteria.",
+      "",
+      "Important scoring instructions:",
+      "* Grade the output based ONLY on the listed criteria.",
+      "* If the post meets all mandatory and secondary criteria, give it a 10.",
+      "* Do not reward generic polish. Reward specificity, author voice, reasoning quality, and fit to the supplied samples.",
+      "* Any mandatory violation must result in a score of 3 or lower.",
+      "* Use the full scale.",
+      "",
+      "Output Format",
+      "Respond with JSON only, in this exact shape:",
+      "{",
+      '  "strengths": ["string"],',
+      '  "weaknesses": ["string"],',
+      '  "reasoning": "string",',
+      '  "score": number',
+      "}"
+    ].filter(Boolean).join("\n")
+  };
+}
+
+function fallbackGraderEvaluation(payload) {
+  const draft = sanitizeBlock(payload.draft, "", 9000);
+  const contentBrief = getContentBrief(payload);
+  const words = draft ? draft.split(/\s+/).filter(Boolean).length : 0;
+  const hasBrief = getBriefFilledCount(contentBrief) > 0;
+  const hasConcreteAnchor = /\b\d+[%x]?\b|HYROX|Vande Bharat|Solow|client|customer|meeting|team|workflow|budget|legal|infosec/i.test(draft);
+  const hasQuestion = draft.includes("?");
+  const hasGenericPattern = /in today's fast-paced|game[- ]changer|unlock|leverage|transformative|revolutionize|delve|navigate the complexities/i.test(draft);
+  const hasPointOfView = /not enough|not just|the real|the useful|the obvious|what if|because|but/i.test(draft);
+  const hasSamples = sanitizeText(payload.personalStyle?.samples).split(/\s+/).filter(Boolean).length >= 80;
+  let score = 5;
+
+  if (words >= 130 && words <= 420) score += 1;
+  if (words < 90) score -= 1;
+  if (hasBrief) score += 1;
+  if (hasConcreteAnchor) score += 1;
+  if (hasQuestion) score += 0.5;
+  if (hasPointOfView) score += 1;
+  if (hasSamples) score += 0.5;
+  if (hasGenericPattern) score -= 2;
+
+  const normalized = normalizeGraderEvaluation({
+    score,
+    strengths: [
+      hasPointOfView ? "The draft contains a visible point of view or tension." : "The draft has a recognizable topic and structure.",
+      hasConcreteAnchor ? "It uses at least one concrete anchor or operating detail." : "It can be improved with a more specific anchor.",
+      hasBrief ? "It has some connection to the supplied content brief." : "It is ready for a more explicit content brief."
+    ],
+    weaknesses: [
+      hasGenericPattern ? "Some language still reads like generic AI thought leadership." : "The grader should still push for sharper originality before publishing.",
+      hasConcreteAnchor ? "The concrete anchor can be made more consequential." : "It needs a named anecdote, example, data point, or lived observation.",
+      hasSamples ? "Style-sample fit should be checked against actual rhythm and argument shape." : "Add more tone samples to make the style evaluation more reliable."
+    ],
+    reasoning: "This local grader uses deterministic quality signals because Claude grading is unavailable. Treat it as directional; the Claude grader is stricter and more sample-aware."
+  });
+
+  return {
+    ...normalized,
+    provider: "local",
+    model: "local-grader"
+  };
+}
+
+async function evaluateDraftWithGrader(payload, critiqueText = "") {
+  const apiKey = getAnthropicApiKey();
+  if (!apiKey.value) {
+    return {
+      evaluation: fallbackGraderEvaluation(payload),
+      provider: "local",
+      model: "local-grader",
+      usage: calculateUsageCost(),
+      warning: "Claude grader is not configured. This is a local directional evaluation."
+    };
+  }
+
+  const prompt = buildDraftGraderPrompt(payload, critiqueText);
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-api-key": apiKey.value,
+      "anthropic-version": "2023-06-01"
+    },
+    body: JSON.stringify({
+      model: CLAUDE_MODEL,
+      max_tokens: 900,
+      temperature: 0,
+      system: prompt.system,
+      messages: [{ role: "user", content: prompt.user }]
+    })
+  });
+
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(`Claude grader request failed: ${response.status} ${detail}`);
+  }
+
+  const data = await response.json();
+  const evaluation = normalizeGraderEvaluation(extractJsonObject(getClaudeText(data)));
+
+  return {
+    evaluation: {
+      ...evaluation,
+      provider: "claude",
+      model: data.model || CLAUDE_MODEL
+    },
+    provider: "claude",
+    model: data.model || CLAUDE_MODEL,
+    usage: calculateUsageCost(data.usage)
   };
 }
 
@@ -1085,39 +1576,56 @@ function fallbackCritique(payload) {
   const words = draft ? draft.split(/\s+/).length : 0;
   const hasIdea = Boolean(sanitizeText(payload.userIdea));
   const hasQuestion = draft.includes("?");
+  const contentBrief = getContentBrief(payload);
+  const hasBrief = getBriefFilledCount(contentBrief) > 0;
 
   return [
-    "Scores: Hook 6/10, Originality 6/10, Clarity 7/10, Specificity 5/10, Usefulness 7/10, Human voice 6/10, LinkedIn readability 7/10.",
-    "Hook: Make the first line sharper, more specific, and less explanatory. It should create tension before it explains.",
-    `Core idea: ${hasIdea ? "The draft has a user idea to build from; make that idea the spine of the post." : "Add a concrete user idea, lived trigger, or personal observation to make the post more ownable."}`,
-    "Specificity: Add one concrete example, tradeoff, operating detail, or observation that proves the claim.",
-    "Originality: Name the hidden bottleneck, tradeoff, or human behavior underneath the topic.",
-    `Engagement: ${hasQuestion ? "The closing question is present; make it softer and more debatable." : "Add a thoughtful closing line or soft question that invites a real point of view."}`,
-    `Length: ${words} words. Aim for 130-220 words unless the story needs more room.`,
-    "Rewrite direction: Lead with the strongest tension, build around one clear insight, add one concrete example or analogy, then land the leadership or domain implication."
+    "EDITORIAL DIAGNOSIS",
+    "- Core problem: The draft is structurally serviceable, but it needs a sharper author-owned tension and a more concrete proof point.",
+    "- Generic or weak lines: Cut any line that says the topic is important without showing the specific operating consequence.",
+    "- Voice mismatch: Push closer to the sample pattern: concrete trigger, named tension, system-level implication, crisp thesis line.",
+    `- Missing specificity: ${hasBrief ? "Use the structured brief as the spine and make one brief detail visible in the body." : hasIdea ? "Turn the user idea into an example, tradeoff, or lived observation instead of leaving it as a theme." : "Add a concrete user idea, lived trigger, or professional observation before rewriting."}`,
+    "- Argument gap: Explain why the obvious interpretation is incomplete, then name the hidden bottleneck underneath it.",
+    `- LinkedIn risk: ${words < 120 ? "Too thin to feel earned." : "Likely skippable if it stays abstract."}`,
+    "",
+    "REWRITE STRATEGY",
+    "- New hook direction: Open with the strongest contradiction, not a summary.",
+    "- Concrete anchor to add: One specific example, analogy, operational detail, or moment of friction.",
+    "- Thesis line to sharpen: Make the central claim short enough to be remembered.",
+    `- Ending move: ${hasQuestion ? "Make the closing question more debatable and less obvious." : "End with a soft question that invites a real point of view."}`,
+    "",
+    "QUALITY VERDICT",
+    "- Publishable: Almost",
+    "- Overall score: 6/10"
   ].join("\n");
 }
 
 function fallbackRewrite(payload) {
   const profileLabel = sanitizeText(payload.profile?.label, "professional");
   const idea = sanitizeText(payload.userIdea, payload.topic?.title || "this shift");
+  const contentBrief = getContentBrief(payload);
   const voice = payload.voice || {};
   const audience = sanitizeText(voice.audience, "domain peers and business leaders");
   const pointOfView = sanitizeText(
     voice.pointOfView,
     "distinctive expertise compounds when professionals turn domain judgment into clear decisions and useful stories"
   );
+  const thesis = contentBrief.thesis || idea;
+  const anchor = contentBrief.anecdote || contentBrief.evidence || "a team improves one visible part of the workflow while the real constraint remains somewhere else";
+  const challengedBelief = contentBrief.commonBelief || "new capability automatically creates better outcomes";
 
   return [
-    `The obvious story is ${idea}.`,
+    `The obvious story is ${thesis}.`,
     "",
     "The useful story sits one layer lower.",
     "",
-    "Most teams look at change through the lens of capability: what can the tool do, how fast can it do it, and where can we plug it into the workflow?",
+    `Most teams look at change through the lens of capability: ${challengedBelief}.`,
     "",
     "But capability is rarely the real bottleneck.",
     "",
-    "The harder question is whether the surrounding system is ready for the change: incentives, handoffs, governance, trust, and the human judgment that still has to sit between the tool and the outcome.",
+    `The harder question is what the surrounding system does with it. Consider ${anchor}.`,
+    "",
+    "The useful lesson is not that the tool is weak. It is that the decision loop around the tool is often unprepared: incentives, handoffs, governance, trust, and the human judgment that still sits between the tool and the outcome.",
     "",
     "That is where the tradeoff appears. A faster tool can create slower decisions if the operating model around it is still unclear.",
     "",
@@ -1142,13 +1650,18 @@ function fallbackPolish(payload) {
 async function runWorkflowStage(payload) {
   const linkedInPromptSkill = getLinkedInPromptSkill();
   const promptPayload = { ...payload, linkedInPromptSkill };
+  const stage = sanitizeText(promptPayload.stage, "critique");
   const apiKey = getAnthropicApiKey();
   if (!apiKey.value) {
+    const text = fallbackWorkflowText(promptPayload);
+    const evaluation = stage === "critique" ? fallbackGraderEvaluation({ ...promptPayload, draft: promptPayload.draft }) : null;
     return {
-      text: fallbackWorkflowText(promptPayload),
+      text,
+      evaluation,
       provider: "local",
       model: "local-brand-engine",
-      usage: calculateUsageCost()
+      usage: calculateUsageCost(),
+      warning: "Claude is not configured. This is a local fallback and may be less personal."
     };
   }
 
@@ -1162,8 +1675,8 @@ async function runWorkflowStage(payload) {
     },
     body: JSON.stringify({
       model: CLAUDE_MODEL,
-      max_tokens: 1100,
-      temperature: 0.72,
+      max_tokens: 1400,
+      temperature: stage === "critique" ? 0.42 : 0.68,
       system: prompt.system,
       messages: [{ role: "user", content: prompt.user }]
     })
@@ -1185,11 +1698,29 @@ async function runWorkflowStage(payload) {
     throw new Error("Claude returned an empty workflow result");
   }
 
+  const workflowUsage = calculateUsageCost(data.usage);
+  let evaluation = null;
+  let usage = workflowUsage;
+
+  if (stage === "critique") {
+    try {
+      const graderResult = await evaluateDraftWithGrader(promptPayload, text);
+      evaluation = graderResult.evaluation;
+      usage = combineUsageCost(workflowUsage, graderResult.usage);
+    } catch (error) {
+      evaluation = {
+        ...fallbackGraderEvaluation(promptPayload),
+        warning: error.message
+      };
+    }
+  }
+
   return {
     text,
+    evaluation,
     provider: "claude",
     model: data.model || CLAUDE_MODEL,
-    usage: calculateUsageCost(data.usage)
+    usage
   };
 }
 
@@ -1202,7 +1733,8 @@ async function generatePost(payload) {
       post: fallbackPost(promptPayload),
       provider: "local",
       model: "local-brand-engine",
-      usage: calculateUsageCost()
+      usage: calculateUsageCost(),
+      warning: "Claude is not configured. This is a local fallback and may be less personal."
     };
   }
 
@@ -1216,8 +1748,8 @@ async function generatePost(payload) {
     },
     body: JSON.stringify({
       model: CLAUDE_MODEL,
-      max_tokens: 900,
-      temperature: 0.78,
+      max_tokens: 1100,
+      temperature: 0.72,
       system: prompt.system,
       messages: [{ role: "user", content: prompt.user }]
     })
@@ -1341,7 +1873,8 @@ const server = http.createServer(async (req, res) => {
           provider: "local",
           model: "local-brand-engine",
           usage: calculateUsageCost(),
-          warning: error.message
+          warning: "Claude generation failed, so this draft used the local fallback. Treat it as a rough placeholder; it may be more generic and less faithful to tone samples.",
+          fallbackReason: error.message
         };
         recordAnalyticsEvent({
           event: "api_generate_completed",
@@ -1391,17 +1924,23 @@ const server = http.createServer(async (req, res) => {
             model: result.model,
             latencyMs: Date.now() - startedAt,
             success: true,
+            graderScore: result.evaluation?.score || 0,
             ...result.usage
           }
         }, req);
         sendJson(res, 200, result);
       } catch (error) {
+        const fallbackText = fallbackWorkflowText(payload);
         const fallback = {
-          text: fallbackWorkflowText(payload),
+          text: fallbackText,
+          evaluation: sanitizeText(payload.stage, "critique") === "critique"
+            ? fallbackGraderEvaluation({ ...payload, draft: payload.draft })
+            : null,
           provider: "local",
           model: "local-brand-engine",
           usage: calculateUsageCost(),
-          warning: error.message
+          warning: "Claude workflow failed, so this step used the local fallback. Treat it as a rough placeholder; it may be more generic and less editorially sharp.",
+          fallbackReason: error.message
         };
         recordAnalyticsEvent({
           event: "api_workflow_completed",
@@ -1413,6 +1952,7 @@ const server = http.createServer(async (req, res) => {
             model: fallback.model,
             latencyMs: Date.now() - startedAt,
             success: true,
+            graderScore: fallback.evaluation?.score || 0,
             ...fallback.usage,
             usedFallback: true,
             errorCode: "claude_workflow_failed"

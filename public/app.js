@@ -389,6 +389,14 @@ const DEFAULT_GENERATION_SETTINGS = {
 
 const DEFAULT_WORKFLOW = {
   userIdea: "",
+  contentBrief: {
+    thesis: "",
+    commonBelief: "",
+    anecdote: "",
+    evidence: "",
+    takeaway: ""
+  },
+  graderEvaluation: null,
   activeStage: "idea"
 };
 
@@ -421,7 +429,7 @@ const state = {
   voice: initialProfileWorkspace.voice,
   personalStyle: initialProfileWorkspace.personalStyle,
   generationSettings: ensureGenerationSettings(loadJson("linkedinStudioGenerationSettings", DEFAULT_GENERATION_SETTINGS)),
-  workflow: loadJson("linkedinStudioWorkflow", DEFAULT_WORKFLOW),
+  workflow: ensureWorkflow(loadJson("linkedinStudioWorkflow", DEFAULT_WORKFLOW)),
   history: loadJson("linkedinStudioHistory", [])
 };
 saveJson("linkedinStudioProfileOverrides", state.profileOverrides);
@@ -443,6 +451,7 @@ const elements = {
   copyButton: document.querySelector("#copyButton"),
   saveButton: document.querySelector("#saveButton"),
   providerBadge: document.querySelector("#providerBadge"),
+  qualityNotice: document.querySelector("#qualityNotice"),
   historyList: document.querySelector("#historyList"),
   historyCount: document.querySelector("#historyCount"),
   postedThisMonth: document.querySelector("#postedThisMonth"),
@@ -462,10 +471,22 @@ const elements = {
   viralityMode: document.querySelector("#viralityMode"),
   currentAffair: document.querySelector("#currentAffair"),
   userIdea: document.querySelector("#userIdea"),
+  briefThesis: document.querySelector("#briefThesis"),
+  briefBelief: document.querySelector("#briefBelief"),
+  briefAnecdote: document.querySelector("#briefAnecdote"),
+  briefEvidence: document.querySelector("#briefEvidence"),
+  briefTakeaway: document.querySelector("#briefTakeaway"),
   critiqueButton: document.querySelector("#critiqueButton"),
   rewriteButton: document.querySelector("#rewriteButton"),
   polishButton: document.querySelector("#polishButton"),
   critiqueOutput: document.querySelector("#critiqueOutput"),
+  critiqueRow: document.querySelector("#critiqueRow"),
+  graderPanel: document.querySelector("#graderPanel"),
+  graderScore: document.querySelector("#graderScore"),
+  graderVerdict: document.querySelector("#graderVerdict"),
+  graderStrengths: document.querySelector("#graderStrengths"),
+  graderWeaknesses: document.querySelector("#graderWeaknesses"),
+  graderReasoning: document.querySelector("#graderReasoning"),
   rewriteOutput: document.querySelector("#rewriteOutput"),
   finalOutput: document.querySelector("#finalOutput")
 };
@@ -532,6 +553,20 @@ function getSampleAnalytics() {
   };
 }
 
+function getBriefAnalytics() {
+  const fields = [
+    elements.briefThesis?.value,
+    elements.briefBelief?.value,
+    elements.briefAnecdote?.value,
+    elements.briefEvidence?.value,
+    elements.briefTakeaway?.value
+  ];
+
+  return {
+    briefFilledCount: fields.filter((value) => String(value || "").trim()).length
+  };
+}
+
 function getAnalyticsContext(extra = {}) {
   const profile = getSelectedProfile();
   const topic = getSelectedTopic();
@@ -547,6 +582,7 @@ function getAnalyticsContext(extra = {}) {
     currentTriggerLength: elements.currentAffair?.value?.trim().length || 0,
     historyCount: state.history.length,
     ...getSampleAnalytics(),
+    ...getBriefAnalytics(),
     ...extra
   };
 }
@@ -636,6 +672,17 @@ function ensureGenerationSettings(settings) {
     ...DEFAULT_GENERATION_SETTINGS,
     ...settings,
     styleMode: migratedStyleMode || DEFAULT_GENERATION_SETTINGS.styleMode
+  };
+}
+
+function ensureWorkflow(workflow) {
+  return {
+    ...DEFAULT_WORKFLOW,
+    ...(workflow || {}),
+    contentBrief: {
+      ...DEFAULT_WORKFLOW.contentBrief,
+      ...(workflow?.contentBrief || {})
+    }
   };
 }
 
@@ -802,10 +849,18 @@ function renderGenerationSettings() {
 }
 
 function renderWorkflow() {
-  elements.userIdea.value = state.workflow.userIdea || "";
+  const workflow = ensureWorkflow(state.workflow);
+  state.workflow = workflow;
+  elements.userIdea.value = workflow.userIdea || "";
+  elements.briefThesis.value = workflow.contentBrief.thesis || "";
+  elements.briefBelief.value = workflow.contentBrief.commonBelief || "";
+  elements.briefAnecdote.value = workflow.contentBrief.anecdote || "";
+  elements.briefEvidence.value = workflow.contentBrief.evidence || "";
+  elements.briefTakeaway.value = workflow.contentBrief.takeaway || "";
   document.querySelectorAll(".workflow-step").forEach((step) => {
-    step.classList.toggle("active", step.dataset.workflowStage === state.workflow.activeStage);
+    step.classList.toggle("active", step.dataset.workflowStage === workflow.activeStage);
   });
+  renderGraderEvaluation();
   updateWorkflowControls();
 }
 
@@ -863,6 +918,67 @@ function renderSampleMetrics() {
   elements.sampleWordCount.textContent = `${words} ${words === 1 ? "word" : "words"}`;
 }
 
+function getGraderScoreClass(score) {
+  if (score >= 8) return "score-high";
+  if (score >= 6) return "score-medium";
+  return "score-low";
+}
+
+function normalizeClientGraderEvaluation(evaluation) {
+  if (!evaluation || typeof evaluation !== "object") {
+    return null;
+  }
+
+  const rawScore = Number(evaluation.score);
+  const score = Number.isFinite(rawScore) ? Math.max(1, Math.min(10, Math.round(rawScore))) : 0;
+  if (!score) {
+    return null;
+  }
+
+  return {
+    score,
+    maxScore: Number(evaluation.maxScore) || 10,
+    verdict: evaluation.verdict || (score >= 8 ? "Strong" : score >= 7 ? "Publishable with edits" : score >= 4 ? "Needs rewrite" : "Not publishable"),
+    strengths: Array.isArray(evaluation.strengths) ? evaluation.strengths.filter(Boolean).slice(0, 3) : [],
+    weaknesses: Array.isArray(evaluation.weaknesses) ? evaluation.weaknesses.filter(Boolean).slice(0, 3) : [],
+    reasoning: evaluation.reasoning || "",
+    provider: evaluation.provider || "",
+    model: evaluation.model || "",
+    warning: evaluation.warning || ""
+  };
+}
+
+function renderGraderList(list, items, fallback) {
+  list.innerHTML = (items.length ? items : [fallback])
+    .map((item) => `<li>${escapeHtml(item)}</li>`)
+    .join("");
+}
+
+function renderGraderEvaluation() {
+  const evaluation = normalizeClientGraderEvaluation(state.workflow.graderEvaluation);
+  elements.critiqueRow.classList.toggle("has-grader", Boolean(evaluation));
+  elements.graderPanel.hidden = !evaluation;
+
+  if (!evaluation) {
+    elements.graderScore.textContent = "--/10";
+    elements.graderVerdict.textContent = "";
+    elements.graderStrengths.innerHTML = "";
+    elements.graderWeaknesses.innerHTML = "";
+    elements.graderReasoning.textContent = "";
+    return;
+  }
+
+  elements.graderPanel.classList.remove("score-low", "score-medium", "score-high");
+  elements.graderPanel.classList.add(getGraderScoreClass(evaluation.score));
+  elements.graderScore.textContent = `${evaluation.score}/${evaluation.maxScore}`;
+  elements.graderVerdict.textContent = evaluation.verdict;
+  renderGraderList(elements.graderStrengths, evaluation.strengths, "Clear topic and enough structure to evaluate.");
+  renderGraderList(elements.graderWeaknesses, evaluation.weaknesses, "Needs sharper specificity and stronger author voice.");
+  elements.graderReasoning.textContent = evaluation.warning
+    ? `${evaluation.reasoning} ${evaluation.warning}`.trim()
+    : evaluation.reasoning;
+}
+
 function renderAll() {
   elements.weekLabel.textContent = getWeekLabel();
   ensureSelectedTopicForProfile();
@@ -876,6 +992,7 @@ function renderAll() {
   renderWorkflow();
   renderHistory();
   renderMetrics();
+  renderGraderEvaluation();
 }
 
 function syncVoiceFromInputs() {
@@ -909,15 +1026,22 @@ function syncGenerationSettingsFromInputs() {
 
 function syncWorkflowFromInputs() {
   state.workflow = {
-    ...state.workflow,
-    userIdea: elements.userIdea.value.trim()
+    ...ensureWorkflow(state.workflow),
+    userIdea: elements.userIdea.value.trim(),
+    contentBrief: {
+      thesis: elements.briefThesis.value.trim(),
+      commonBelief: elements.briefBelief.value.trim(),
+      anecdote: elements.briefAnecdote.value.trim(),
+      evidence: elements.briefEvidence.value.trim(),
+      takeaway: elements.briefTakeaway.value.trim()
+    }
   };
   saveJson("linkedinStudioWorkflow", state.workflow);
 }
 
 function setWorkflowStage(stage) {
   state.workflow = {
-    ...state.workflow,
+    ...ensureWorkflow(state.workflow),
     activeStage: stage
   };
   saveJson("linkedinStudioWorkflow", state.workflow);
@@ -952,12 +1076,59 @@ function getWorkflowPayload() {
     personalStyle: state.personalStyle,
     generationSettings: state.generationSettings,
     userIdea: state.workflow.userIdea,
+    contentBrief: state.workflow.contentBrief,
+    graderEvaluation: state.workflow.graderEvaluation,
     draft: elements.draftOutput.value.trim(),
     critique: elements.critiqueOutput.value.trim(),
     rewrite: elements.rewriteOutput.value.trim(),
     final: elements.finalOutput.value.trim(),
     history: state.history
   };
+}
+
+function setQualityNotice(message = "") {
+  if (!elements.qualityNotice) {
+    return;
+  }
+
+  elements.qualityNotice.textContent = message;
+  elements.qualityNotice.hidden = !message;
+}
+
+function setGraderEvaluation(evaluation) {
+  state.workflow = {
+    ...ensureWorkflow(state.workflow),
+    graderEvaluation: normalizeClientGraderEvaluation(evaluation)
+  };
+  saveJson("linkedinStudioWorkflow", state.workflow);
+  renderGraderEvaluation();
+}
+
+function clearGraderEvaluation() {
+  if (!state.workflow.graderEvaluation) {
+    return;
+  }
+
+  state.workflow = {
+    ...ensureWorkflow(state.workflow),
+    graderEvaluation: null
+  };
+  saveJson("linkedinStudioWorkflow", state.workflow);
+  renderGraderEvaluation();
+}
+
+function applyProviderResult(data, label) {
+  if (data.provider === "claude") {
+    elements.providerBadge.textContent = `Claude ${label}`;
+    setQualityNotice("");
+    return true;
+  }
+
+  const fallbackMessage = data.warning ||
+    "Claude is unavailable, so this result used the local fallback. Treat it as a rough placeholder; it may be more generic and less faithful to your samples.";
+  elements.providerBadge.textContent = "Local fallback";
+  setQualityNotice(fallbackMessage);
+  return false;
 }
 
 async function generatePost() {
@@ -968,6 +1139,7 @@ async function generatePost() {
   }));
   setBusy(true);
   elements.providerBadge.textContent = "Drafting";
+  setQualityNotice("");
 
   try {
     const response = await fetch("/api/generate", {
@@ -985,7 +1157,8 @@ async function generatePost() {
     elements.critiqueOutput.value = "";
     elements.rewriteOutput.value = "";
     elements.finalOutput.value = "";
-    elements.providerBadge.textContent = data.provider === "claude" ? "Claude draft" : "Local draft";
+    clearGraderEvaluation();
+    const usedClaude = applyProviderResult(data, "draft");
     setWorkflowStage("draft");
     renderMetrics();
     trackEvent("draft_generated", getAnalyticsContext({
@@ -993,9 +1166,10 @@ async function generatePost() {
       model: data.model || "unknown",
       latencyMs: Date.now() - startedAt,
       draftWordCount: countWords(data.post || ""),
-      success: true
+      success: true,
+      usedFallback: !usedClaude
     }));
-    showToast(data.provider === "claude" ? "Claude draft ready." : "Local draft ready.");
+    showToast(usedClaude ? "Claude draft ready." : "Local fallback draft ready.");
   } catch (error) {
     const localDraft = createLocalDraft(
       payload.profile,
@@ -1010,7 +1184,9 @@ async function generatePost() {
     elements.critiqueOutput.value = "";
     elements.rewriteOutput.value = "";
     elements.finalOutput.value = "";
-    elements.providerBadge.textContent = "Local draft";
+    clearGraderEvaluation();
+    elements.providerBadge.textContent = "Local fallback";
+    setQualityNotice("Claude request failed in the browser. This draft used the local fallback and may be more generic than production Claude output.");
     setWorkflowStage("draft");
     renderMetrics();
     trackEvent("draft_generated", getAnalyticsContext({
@@ -1022,7 +1198,7 @@ async function generatePost() {
       usedFallback: true,
       errorCode: "client_generate_failed"
     }));
-    showToast("Local draft ready.");
+    showToast("Local fallback draft ready.");
   } finally {
     setBusy(false);
   }
@@ -1059,6 +1235,7 @@ async function runWorkflowStage(stage) {
   trackEvent("workflow_requested", getAnalyticsContext({ stage }));
   setBusy(true);
   elements.providerBadge.textContent = stage === "polish" ? "Polishing" : stage === "rewrite" ? "Rewriting" : "Critiquing";
+  setQualityNotice("");
 
   try {
     const response = await fetch("/api/workflow", {
@@ -1072,41 +1249,46 @@ async function runWorkflowStage(stage) {
     }
 
     const data = await response.json();
-    applyWorkflowResult(stage, data.text || "");
-    elements.providerBadge.textContent =
-      data.provider === "claude" ? `Claude ${getStageLabel(stage).toLowerCase()}` : `Local ${getStageLabel(stage).toLowerCase()}`;
+    applyWorkflowResult(stage, data.text || "", data.evaluation || null);
+    const usedClaude = applyProviderResult(data, getStageLabel(stage).toLowerCase());
     trackEvent("workflow_completed", getAnalyticsContext({
       stage,
       provider: data.provider || "unknown",
       model: data.model || "unknown",
       latencyMs: Date.now() - startedAt,
       finalWordCount: countWords(data.text || ""),
-      success: true
+      graderScore: data.evaluation?.score || 0,
+      success: true,
+      usedFallback: !usedClaude
     }));
-    showToast(`${getStageLabel(stage)} ready.`);
+    showToast(usedClaude ? `${getStageLabel(stage)} ready.` : `Local fallback ${getStageLabel(stage).toLowerCase()} ready.`);
   } catch (error) {
     const localText = createLocalWorkflowText(stage, payload);
-    applyWorkflowResult(stage, localText);
-    elements.providerBadge.textContent = `Local ${getStageLabel(stage).toLowerCase()}`;
+    const localEvaluation = stage === "critique" ? createLocalGraderEvaluation(payload) : null;
+    applyWorkflowResult(stage, localText, localEvaluation);
+    elements.providerBadge.textContent = "Local fallback";
+    setQualityNotice("Claude workflow request failed in the browser. This step used the local fallback and may be more generic than the Claude version.");
     trackEvent("workflow_completed", getAnalyticsContext({
       stage,
       provider: "local_browser",
       model: "local-brand-engine",
       latencyMs: Date.now() - startedAt,
       finalWordCount: countWords(localText),
+      graderScore: localEvaluation?.score || 0,
       success: true,
       usedFallback: true,
       errorCode: "client_workflow_failed"
     }));
-    showToast(`${getStageLabel(stage)} ready.`);
+    showToast(`Local fallback ${getStageLabel(stage).toLowerCase()} ready.`);
   } finally {
     setBusy(false);
   }
 }
 
-function applyWorkflowResult(stage, text) {
+function applyWorkflowResult(stage, text, evaluation = null) {
   if (stage === "critique") {
     elements.critiqueOutput.value = text;
+    setGraderEvaluation(evaluation);
   }
 
   if (stage === "rewrite") {
@@ -1161,10 +1343,20 @@ function createLocalDraft(profile, topic, angle, voice, personalStyle = {}, gene
     "distinctive expertise compounds when professionals turn domain judgment into clear decisions and useful stories";
 
   const hasStyleSamples = Boolean((personalStyle.samples || "").trim());
+  const contentBrief = ensureWorkflow(state.workflow).contentBrief;
   const triggerPhrase = currentTrigger ? currentTrigger.split(/[.!?\n]/)[0].trim() : topicPhrase;
   const ideaLine = userIdea
     ? `The starting point is simple: ${userIdea}`
+    : contentBrief.thesis
+    ? `The thesis is simple: ${contentBrief.thesis}`
     : `The useful conversation starts with ${topicPhrase}.`;
+  const briefLine = contentBrief.commonBelief
+    ? `The common belief is that ${contentBrief.commonBelief}. But that is only the surface layer.`
+    : contentBrief.anecdote
+    ? `The anchor is concrete: ${contentBrief.anecdote}`
+    : contentBrief.evidence
+    ? `The proof point matters: ${contentBrief.evidence}`
+    : "";
   const hooks = {
     Teach: [
       `Most teams are asking the wrong first question about ${topicPhrase}.`,
@@ -1265,6 +1457,8 @@ function createLocalDraft(profile, topic, angle, voice, personalStyle = {}, gene
     "",
     ideaLine,
     "",
+    briefLine,
+    briefLine ? "" : null,
     body[angle] || body.Teach,
     "",
     styleModeLine[styleMode] || styleModeLine.Balanced,
@@ -1274,7 +1468,7 @@ function createLocalDraft(profile, topic, angle, voice, personalStyle = {}, gene
     viralityMode === "Debate spark"
       ? "Which side of this debate are you on?"
       : "Where are you seeing this actually change the way work gets done, not just the language around it?"
-  ].join("\n");
+  ].filter((line) => line !== null).join("\n");
 }
 
 function createLocalCritique(payload) {
@@ -1282,32 +1476,76 @@ function createLocalCritique(payload) {
   const words = draft ? draft.split(/\s+/).length : 0;
   const hasQuestion = /\?\s*$/.test(draft.trim()) || draft.includes("?");
   const hasIdea = Boolean((payload.userIdea || "").trim());
+  const brief = payload.contentBrief || {};
+  const hasBrief = Object.values(brief).some((value) => String(value || "").trim());
 
   return [
-    "Scores: Hook 6/10, Originality 6/10, Clarity 7/10, Specificity 5/10, Usefulness 7/10, Human voice 6/10, LinkedIn readability 7/10.",
-    "Hook: Make the first line sharper, more specific, and less explanatory. It should create tension before it explains.",
-    `Core idea: ${hasIdea ? "The draft uses the user idea, but it should become the spine of the post." : "The draft would be stronger with a concrete user idea, lived trigger, or personal observation."}`,
-    "Specificity: Add one concrete example, tradeoff, operating detail, or observation that proves the claim.",
-    "Structure: Keep the post moving from observation to tension to implication. Remove any paragraph that only repeats the same claim.",
-    "Originality: Push beyond a generic business lesson. Name the hidden bottleneck, tradeoff, or human behavior underneath.",
-    `Engagement: ${hasQuestion ? "The closing question is present; make it softer and more debatable." : "Add a thoughtful closing line or soft question that invites a real point of view."}`,
-    `Length: ${words} words. Aim for 130-220 words unless the story needs more room.`,
-    "Rewrite direction: Start with the strongest tension, build around one clear insight, add one concrete example or analogy, then end with a crisp leadership or domain implication."
+    "EDITORIAL DIAGNOSIS",
+    "- Core problem: The draft needs a sharper author-owned tension and a more concrete proof point.",
+    "- Generic or weak lines: Cut any line that explains importance without showing consequence.",
+    "- Voice mismatch: Push closer to the sample pattern: concrete trigger, named tension, system-level implication, crisp thesis line.",
+    `- Missing specificity: ${hasBrief ? "Use the content brief as the spine and make one brief detail visible in the body." : hasIdea ? "Turn the user idea into an example, tradeoff, or lived observation." : "Add a concrete user idea, lived trigger, or professional observation before rewriting."}`,
+    "- Argument gap: Explain why the obvious interpretation is incomplete, then name the hidden bottleneck underneath it.",
+    `- LinkedIn risk: ${words < 120 ? "Too thin to feel earned." : "Skippable if it stays abstract."}`,
+    "",
+    "REWRITE STRATEGY",
+    "- New hook direction: Open with the strongest contradiction, not a summary.",
+    "- Concrete anchor to add: One specific example, analogy, operating detail, or moment of friction.",
+    "- Thesis line to sharpen: Make the central claim short enough to be remembered.",
+    `- Ending move: ${hasQuestion ? "Make the closing question more debatable and less obvious." : "End with a soft question that invites a real point of view."}`,
+    "",
+    "QUALITY VERDICT",
+    "- Publishable: Almost",
+    "- Overall score: 6/10"
   ].join("\n");
+}
+
+function createLocalGraderEvaluation(payload) {
+  const draft = payload.draft || "";
+  const words = draft ? draft.split(/\s+/).filter(Boolean).length : 0;
+  const brief = payload.contentBrief || {};
+  const hasBrief = Object.values(brief).some((value) => String(value || "").trim());
+  const hasConcreteAnchor = /\b\d+[%x]?\b|HYROX|Vande Bharat|Solow|client|customer|meeting|team|workflow|budget|legal|infosec/i.test(draft);
+  const hasPointOfView = /not enough|not just|the real|the useful|the obvious|what if|because|but/i.test(draft);
+  const hasQuestion = draft.includes("?");
+  const hasGenericPattern = /in today's fast-paced|game[- ]changer|unlock|leverage|transformative|revolutionize|delve|navigate the complexities/i.test(draft);
+  let score = 5;
+
+  if (words >= 130 && words <= 420) score += 1;
+  if (words < 90) score -= 1;
+  if (hasBrief) score += 1;
+  if (hasConcreteAnchor) score += 1;
+  if (hasPointOfView) score += 1;
+  if (hasQuestion) score += 0.5;
+  if (hasGenericPattern) score -= 2;
+
+  score = Math.max(1, Math.min(10, Math.round(score)));
+
+  return normalizeClientGraderEvaluation({
+    score,
+    verdict: score >= 8 ? "Strong" : score >= 7 ? "Publishable with edits" : score >= 4 ? "Needs rewrite" : "Not publishable",
+    strengths: [
+      hasPointOfView ? "Visible point of view or tension." : "Recognizable topic and structure.",
+      hasConcreteAnchor ? "Uses at least one concrete anchor." : "Has room for a sharper anchor.",
+      hasBrief ? "Connects to the supplied content brief." : "Can become stronger with a filled content brief."
+    ],
+    weaknesses: [
+      hasGenericPattern ? "Some phrasing still reads generic." : "Originality should still be stress-tested.",
+      hasConcreteAnchor ? "The anchor can carry more consequence." : "Needs a named anecdote, detail, or proof point.",
+      "Claude grader is unavailable here, so this local score is directional."
+    ],
+    reasoning: "Local grader score based on structure, specificity, point of view, content-brief use, and generic-language risk.",
+    provider: "local_browser",
+    model: "local-grader"
+  });
 }
 
 function createLocalRewrite(payload) {
   const profileLabel = payload.profile?.label || "professional";
-  const source = payload.draft || createLocalDraft(
-    payload.profile,
-    payload.topic,
-    payload.angle,
-    payload.voice,
-    payload.personalStyle,
-    payload.generationSettings,
-    payload.userIdea
-  );
-  const idea = payload.userIdea || payload.topic.title;
+  const brief = payload.contentBrief || {};
+  const idea = brief.thesis || payload.userIdea || payload.topic.title;
+  const challengedBelief = brief.commonBelief || "new capability automatically creates better outcomes";
+  const anchor = brief.anecdote || brief.evidence || "a team improves one visible part of the workflow while the real constraint remains somewhere else";
   const firstLine = payload.generationSettings.viralityMode === "Debate spark"
     ? `What if the obvious take on ${idea.toLowerCase()} is the wrong one?`
     : `The obvious story is ${idea}.`;
@@ -1317,11 +1555,13 @@ function createLocalRewrite(payload) {
     "",
     "The useful story sits one layer lower.",
     "",
-    "Most teams look at change through the lens of capability: what can the tool do, how fast can it do it, and where can we plug it into the workflow?",
+    `Most teams look at change through the lens of capability: ${challengedBelief}.`,
     "",
     "But capability is rarely the real bottleneck.",
     "",
-    "The harder question is whether the surrounding system is ready for the change: incentives, handoffs, governance, trust, and the human judgment that still has to sit between the tool and the outcome.",
+    `The harder question is what the surrounding system does with it. Consider ${anchor}.`,
+    "",
+    "The useful lesson is not that the tool is weak. It is that the decision loop around the tool is often unprepared: incentives, handoffs, governance, trust, and the human judgment that still sits between the tool and the outcome.",
     "",
     "That is where the tradeoff appears. A faster tool can create slower decisions if the operating model around it is still unclear.",
     "",
@@ -1413,10 +1653,12 @@ function clearWorkflowOutputs() {
   elements.finalOutput.value = "";
   state.workflow = {
     ...state.workflow,
+    graderEvaluation: null,
     activeStage: "idea"
   };
   saveJson("linkedinStudioWorkflow", state.workflow);
   renderMetrics();
+  renderGraderEvaluation();
 }
 
 function selectProfile(profileId) {
@@ -1581,6 +1823,20 @@ elements.userIdea.addEventListener("change", () => {
     action: "user_idea_text_changed"
   }));
 });
+[
+  elements.briefThesis,
+  elements.briefBelief,
+  elements.briefAnecdote,
+  elements.briefEvidence,
+  elements.briefTakeaway
+].forEach((input) => {
+  input.addEventListener("input", syncWorkflowFromInputs);
+  input.addEventListener("change", () => {
+    trackEvent("content_brief_changed", getAnalyticsContext({
+      action: "content_brief_text_changed"
+    }));
+  });
+});
 elements.pillarFilter.addEventListener("change", () => {
   renderTopics();
   trackEvent("pillar_filter_changed", getAnalyticsContext({
@@ -1597,6 +1853,9 @@ elements.copyButton.addEventListener("click", copyDraft);
 elements.saveButton.addEventListener("click", saveToTracker);
 [elements.draftOutput, elements.rewriteOutput, elements.finalOutput].forEach((input) => {
   input.addEventListener("input", () => {
+    if (input === elements.draftOutput) {
+      clearGraderEvaluation();
+    }
     renderMetrics();
     renderWorkflow();
   });

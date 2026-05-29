@@ -1,4 +1,4 @@
-const CACHE_NAME = "linkedin-content-studio-v3";
+const CACHE_NAME = "linkedin-content-studio-v6";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -10,6 +10,15 @@ const APP_SHELL = [
   "./manifest.webmanifest",
   "./app-icon.svg"
 ];
+const NETWORK_FIRST_PATHS = new Set([
+  "/",
+  "/index.html",
+  "/analytics.html",
+  "/styles.css",
+  "/app.js",
+  "/analytics.js",
+  "/manifest.webmanifest"
+]);
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -35,7 +44,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  if (request.mode === "navigate") {
+  if (request.mode === "navigate" || NETWORK_FIRST_PATHS.has(url.pathname)) {
     event.respondWith(
       fetch(request)
         .then((response) => {

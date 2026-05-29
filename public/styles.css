@@ -508,9 +508,52 @@ select:focus {
   grid-column: 1 / -1;
 }
 
+.content-brief {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fbfcff;
+}
+
+.brief-heading {
+  grid-column: 1 / -1;
+}
+
+.brief-heading .muted {
+  margin-top: 2px;
+  font-size: 0.84rem;
+}
+
+.content-brief label:last-child {
+  grid-column: 1 / -1;
+}
+
+.quality-notice {
+  padding: 11px 12px;
+  border: 1px solid #f2c45f;
+  border-radius: var(--radius);
+  background: #fff7df;
+  color: #6f4b05;
+  font-size: 0.88rem;
+  font-weight: 760;
+  line-height: 1.4;
+}
+
+.quality-notice[hidden] {
+  display: none;
+}
+
 #currentAffair,
 #userIdea {
   min-height: 76px;
+}
+
+.content-brief textarea {
+  min-height: 84px;
 }
 
 .workflow-rail {
@@ -582,13 +625,114 @@ select:focus {
   gap: 12px;
 }
 
+.critique-row,
+.workflow-outputs .rewrite-output,
+.workflow-outputs textarea {
+  min-width: 0;
+}
+
+.critique-row {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.critique-row.has-grader {
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.72fr);
+}
+
+.workflow-outputs .rewrite-output,
+.workflow-outputs .final-output {
+  grid-column: 1 / -1;
+}
+
 .workflow-outputs textarea {
   min-height: 190px;
   background: #fff;
 }
 
-.workflow-outputs .final-output {
-  grid-column: 1 / -1;
+.grader-panel {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  min-height: 190px;
+  padding: 13px;
+  border: 1px solid #b7c8ee;
+  border-radius: var(--radius);
+  background: #f6f9ff;
+  color: var(--text);
+}
+
+.grader-panel[hidden] {
+  display: none;
+}
+
+.grader-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.grader-header span,
+.grader-lists span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.grader-header strong {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 62px;
+  min-height: 34px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: #1d4ed8;
+  color: #fff;
+  font-size: 0.95rem;
+}
+
+.grader-panel.score-low .grader-header strong {
+  background: #b42318;
+}
+
+.grader-panel.score-medium .grader-header strong {
+  background: #a15c07;
+}
+
+.grader-panel.score-high .grader-header strong {
+  background: #0f766e;
+}
+
+.grader-verdict {
+  font-size: 0.95rem;
+  font-weight: 850;
+}
+
+.grader-lists {
+  display: grid;
+  gap: 10px;
+}
+
+.grader-lists ul {
+  display: grid;
+  gap: 5px;
+  margin: 6px 0 0;
+  padding-left: 18px;
+  color: #25312d;
+  font-size: 0.84rem;
+  line-height: 1.35;
+}
+
+#graderReasoning {
+  margin: 0;
+  color: #394641;
+  font-size: 0.86rem;
+  line-height: 1.45;
 }
 
 #finalOutput {
@@ -876,6 +1020,8 @@ select:focus {
   .analytics-columns,
   .angle-row,
   .composer-controls,
+  .content-brief,
+  .critique-row.has-grader,
   .workflow-outputs {
     grid-template-columns: 1fr;
   }

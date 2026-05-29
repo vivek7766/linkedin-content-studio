@@ -123,6 +123,8 @@ function renderDashboard(summary) {
     card("Generation failure rate", formatPercent(windowData.generation.failureRate), "Client-visible failures"),
     card("Claude drafts", formatNumber(windowData.generation.claude), "Provider mix"),
     card("Local fallback drafts", formatNumber(windowData.generation.local), "Fallback reliance"),
+    card("Avg grader score", `${formatNumber(windowData.grader?.averageScore)}/10`, "Last 7 days"),
+    card("Grader pass rate", formatPercent(windowData.grader?.passRate), "Score >= 7"),
     card("Client latency", formatDuration(windowData.generation.averageClientLatencyMs), "Draft request round trip"),
     card("Server latency", formatDuration(windowData.generation.averageServerLatencyMs), "Claude/fallback endpoint"),
     card("Returning user rate", formatPercent(windowData.returningUserRate), "Repeat usage signal")

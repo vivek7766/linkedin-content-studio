@@ -147,7 +147,7 @@ This endpoint returns whether Claude generation is active, which supported key n
   - Debate spark
 - Current trigger field for a headline, current event, or live observation.
 - Writing workflow:
-  - User idea
+  - Idea + structured content brief
   - Generate draft
   - Critique draft
   - Rewrite draft
@@ -156,8 +156,11 @@ This endpoint returns whether Claude generation is active, which supported key n
   - Strong, specific hooks instead of generic openings.
   - One clear insight per post.
   - Concrete examples, tradeoffs, observations, or operating details.
-  - Critique scores for hook, originality, clarity, specificity, usefulness, human voice, and LinkedIn readability.
+  - Server-side Style DNA extraction from tone samples: observed openings, signature moves, argument shape, rhythm, and anti-copying constraints.
+  - Structured content brief fields: real point of view, belief to challenge, anecdote/lived trigger, proof/concrete detail, and reader takeaway.
+  - Critique now prioritizes editorial diagnosis over generic scoring: core problem, weak lines, voice mismatch, missing specificity, argument gap, LinkedIn risk, rewrite strategy, and one overall quality verdict.
   - Final polish rules to remove fluff, repetition, buzzwords, and AI-sounding lines.
+  - Visible fallback warnings when Claude is unavailable or a request falls back to local template generation.
 - Draft word/character count.
 - Copy draft button.
 - Save to tracker button.
@@ -187,6 +190,12 @@ The generator combines:
 Selected Profile + Topic + Angle + Profile Voice + Tone Samples + Style Mode + Virality Lens + Current trigger + Post History
 ```
 
+The upgraded quality path adds:
+
+```text
+Content Brief + Extracted Style DNA + Visible Claude/local provider status
+```
+
 Every server-side generation and workflow request also loads:
 
 ```text
@@ -195,15 +204,15 @@ LINKEDIN_POST_PROMPTS.md
 
 Treat this file as the shared prompt skill for draft generation, critique, rewrite, and final polish behavior. Editing it changes future server-side prompt calls without requiring changes in `server.js`.
 
-Profile Voice handles strategic positioning for the selected user type. Tone Samples handle writing fingerprint and rhythm. Style Mode controls which one gets more weight.
+Profile Voice handles strategic positioning for the selected user type. Tone Samples handle writing fingerprint and rhythm. Style Mode controls which one gets more weight. The server now extracts Style DNA from the samples and injects it into draft, critique, rewrite, and polish prompts so the model has enforceable style rules instead of passive sample context.
 
 The workflow path is:
 
 ```text
-User idea -> Generate draft -> Critique draft -> Rewrite draft -> Final polish
+Idea + brief -> Generate draft -> Editorial critique + Grader Eval -> Rewrite draft -> Final polish
 ```
 
-The browser stores the selected profile, profile-specific voice/sample overrides, and the user idea locally. `Copy` and `Save to tracker` prefer the final polished post, then the rewrite, then the original draft.
+The Critique draft button now runs two quality checks: an editorial critique and a model-grader evaluation inspired by the Anthropic Prompt Evals notebooks under Desktop/Claude Certification. The grader returns structured JSON with score, strengths, weaknesses, and reasoning; rewrite receives that grader output as a hard quality bar. The browser stores the selected profile, profile-specific voice/sample overrides, user idea, structured content brief, and latest grader result locally. `Copy` and `Save to tracker` prefer the final polished post, then the rewrite, then the original draft.
 
 Server endpoints:
 
@@ -218,6 +227,8 @@ GET /api/health
 The Current Affairs and Virality controls do not fetch or invent news. The user should paste a current trigger/headline if they want topical commentary.
 
 Analytics is intentionally metadata-only. The app does not store user ideas, pasted samples, generated posts, or final drafts in analytics events. Token and cost metrics come from the Claude API `usage` object when Claude is used. Cost estimates default to Sonnet pricing of $3 per million input tokens and $15 per million output tokens, with overrides available through `CLAUDE_INPUT_COST_PER_MTOK`, `CLAUDE_OUTPUT_COST_PER_MTOK`, `CLAUDE_CACHE_WRITE_COST_PER_MTOK`, and `CLAUDE_CACHE_READ_COST_PER_MTOK`. Local JSONL analytics can be replaced with Postgres, Segment, Mixpanel, GA, OpenTelemetry, or a warehouse once the product moves beyond POC. To protect the aggregate dashboard in production, set `ANALYTICS_ADMIN_TOKEN` in Railway and open `/analytics.html?token=YOUR_TOKEN`.
+
+Grader metrics are also metadata-only. The server records `graderScore` on critique workflow events and exposes aggregate grader count, average score, and pass rate in `/api/analytics/summary`.
 
 ## Tone Samples Already Seeded
 
